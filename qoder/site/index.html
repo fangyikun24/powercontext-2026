@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>StudyMate · 学习提效助手</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; color: #1f2937; line-height: 1.7; background: #f8fafc; }
+  .hero { background: linear-gradient(135deg, #0f766e 0%, #134e4a 100%); color: #fff; padding: 64px 24px; text-align: center; }
+  .hero h1 { font-size: 36px; margin-bottom: 12px; }
+  .hero p { font-size: 16px; opacity: .92; max-width: 720px; margin: 0 auto; }
+  .badge { display: inline-block; background: rgba(255,255,255,.18); border-radius: 20px; padding: 4px 14px; font-size: 13px; margin-bottom: 16px; }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 40px 24px; }
+  section { background: #fff; border-radius: 12px; padding: 28px 32px; margin-bottom: 24px; box-shadow: 0 1px 4px rgba(15,23,42,.06); }
+  h2 { font-size: 20px; color: #0f766e; margin-bottom: 14px; border-left: 4px solid #0f766e; padding-left: 12px; }
+  p, li { font-size: 15px; }
+  ul { padding-left: 20px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-top: 12px; }
+  .card { border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px; }
+  .card h3 { font-size: 15px; color: #134e4a; margin-bottom: 6px; }
+  .card p { font-size: 13.5px; color: #475569; }
+  code { background: #f1f5f9; border-radius: 4px; padding: 2px 6px; font-size: 13px; }
+  .term { background: #0f172a; color: #a7f3d0; border-radius: 8px; padding: 16px 20px; font-family: Consolas, monospace; font-size: 13.5px; overflow-x: auto; margin-top: 12px; }
+  .btn { display: inline-block; background: #0f766e; color: #fff; padding: 10px 22px; border-radius: 8px; text-decoration: none; font-size: 14.5px; margin-top: 12px; }
+  .btn:hover { background: #115e59; }
+  .muted { color: #64748b; font-size: 13px; }
+  .footer { text-align: center; padding: 24px; color: #94a3b8; font-size: 13px; }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <span class="badge">OceanBase 大赛 · Qoder 赛道作品</span>
+  <h1>StudyMate · 学习提效助手</h1>
+  <p>把"薄弱点"变成可复用的记忆 —— 记录、检索、复习，让每次学习都有上下文延续。</p>
+</div>
+
+<div class="wrap">
+
+  <section>
+    <h2>项目简介</h2>
+    <p>StudyMate 是一个面向学生与科研人员的学习提效工具。它的核心不是"记笔记"，而是<strong>记忆复用</strong>：当你发现一个知识点没学透，用一条命令把它标记为薄弱点；之后每次复习，StudyMate 都会把它连同相关笔记一起召回。记忆由 <strong>PowerContext</strong> 持久化，重启后依然存在。</p>
+  </section>
+
+  <section>
+    <h2>解决的问题</h2>
+    <ul>
+      <li><strong>学了就忘</strong>：薄弱点散落各处，难以按需召回 → 集中存入记忆层，随时检索。</li>
+      <li><strong>复习没重点</strong>：不知道哪些点薄弱、该补哪里 → <code>review</code> 一键输出复习清单。</li>
+      <li><strong>笔记难检索</strong>：关键词搜不到 → 记忆 + 笔记双路召回，覆盖更全。</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>核心功能</h2>
+    <div class="grid">
+      <div class="card"><h3>📝 记笔记</h3><p><code>studymate note add</code>，支持标签分类。</p></div>
+      <div class="card"><h3>🔍 检索笔记</h3><p><code>studymate note search</code>，全文计分检索。</p></div>
+      <div class="card"><h3>⚠️ 记录薄弱点</h3><p><code>studymate weakness add</code>，写入 PowerContext 记忆。</p></div>
+      <div class="card"><h3>📖 一键复习</h3><p><code>studymate review</code>，合并薄弱点与笔记。</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>体验演示</h2>
+    <p>真实运行输出（本机实测，详见验证记录）：</p>
+    <div class="term">$ studymate weakness add "机器学习-过拟合" "训练好验证差，对策：正则化+早停"<br>✔ 薄弱点已记入记忆<br><br>$ studymate weakness list<br>记忆中已记录的薄弱点：<br>&nbsp;&nbsp;1. 机器学习-过拟合：训练好验证差，对策：正则化+早停</div>
+    <p class="muted">注：演示视频/截图以仓库 records/ 内实录为准（发布时补充）。</p>
+  </section>
+
+  <section>
+    <h2>代码仓库</h2>
+    <p>源码位于 <code>qoder/studymate/</code>（PowerContext 记忆层 + 资料库 + CLI）。</p>
+    <a class="btn" href="#" id="repo-link">查看代码仓库（fork 后填入链接）</a>
+  </section>
+
+  <section>
+    <h2>体验入口</h2>
+    <p>本地运行（仅标准库依赖）：</p>
+    <div class="term">git clone &lt;你的仓库地址&gt; &amp;&amp; cd qoder/studymate<br>python -m studymate.cli.main review "过拟合"</div>
+    <p class="muted">可选：设置 POWERCONTEXT_URL 接入 PowerContext server；未设置自动使用本地 SQLite，功能完整。</p>
+  </section>
+
+</div>
+
+<div class="footer">StudyMate · OceanBase 第六届数据库大赛 Qoder 赛道 · Build with Qoder</div>
+
+</body>
+</html>
