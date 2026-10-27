@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MiniKB · 端侧知识库（seekdb 混合检索）</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: "Microsoft YaHei", system-ui, sans-serif; background: #f0f4f8; color: #1f2937; min-height: 100vh; }
+    header { background: linear-gradient(135deg, #0b3d91, #1b6fd8); color: #fff; padding: 18px 24px; }
+    header h1 { font-size: 20px; }
+    header p { font-size: 13px; opacity: .85; margin-top: 4px; }
+    main { max-width: 960px; margin: 20px auto; padding: 0 16px; display: flex; flex-direction: column; gap: 16px; }
+    .card { background: #fff; border-radius: 12px; padding: 18px; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+    .card h2 { font-size: 16px; margin-bottom: 12px; color: #0b3d91; }
+    .status-bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; font-size: 13px; }
+    .badge { padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+    .badge.loading { background: #fef3c7; color: #92400e; }
+    .badge.ready { background: #d1fae5; color: #065f46; }
+    .badge.error { background: #fee2e2; color: #b91c1c; }
+    .badge.neutral { background: #e5e7eb; color: #374151; }
+    textarea, input[type="text"] { width: 100%; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; font-family: inherit; resize: vertical; }
+    textarea { min-height: 90px; }
+    .row { display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+    button { padding: 9px 16px; border: none; border-radius: 8px; font-size: 14px; cursor: pointer; font-weight: 600; }
+    button.primary { background: #1b6fd8; color: #fff; }
+    button.ghost { background: #e5e7eb; color: #374151; }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    .log { background: #111827; color: #d1fae5; border-radius: 8px; padding: 12px; font-size: 12px; font-family: Consolas, monospace; max-height: 200px; overflow-y: auto; white-space: pre-wrap; }
+    .result-item { border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; margin-bottom: 10px; }
+    .result-item .meta { font-size: 12px; color: #6b7280; margin-bottom: 4px; }
+    .result-item .doc { font-size: 14px; line-height: 1.6; }
+    .result-item .score { font-size: 12px; color: #0b3d91; font-weight: 600; }
+    table.perf { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 10px; }
+    table.perf th, table.perf td { border: 1px solid #e5e7eb; padding: 8px; text-align: left; }
+    table.perf th { background: #f8fafc; }
+    .dim-note { font-size: 12px; color: #6b7280; margin-top: 6px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>MiniKB · 端侧知识库</h1>
+    <p>浏览器本地向量化（Transformers.js / WebGPU→WASM）+ seekdb 向量与全文混合检索</p>
+  </header>
+
+  <main>
+    <!-- 状态 -->
+    <div class="card">
+      <h2>运行状态</h2>
+      <div class="status-bar">
+        <span id="modelBadge" class="badge loading">模型加载中…</span>
+        <span id="backendBadge" class="badge loading">连接后端中…</span>
+        <span id="backendMode" class="badge neutral">推理后端：检测中</span>
+      </div>
+      <div class="log" id="log" style="margin-top:10px;">等待初始化…</div>
+    </div>
+
+    <!-- 导入 -->
+    <div class="card">
+      <h2>① 导入语料</h2>
+      <textarea id="docsInput" placeholder="每行一条文档，例如：&#10;OceanBase seekdb 是 AI 原生混合搜索数据库&#10;向量数据库支持语义相似度检索&#10;全文检索基于 BM25 关键词匹配"></textarea>
+      <div class="row">
+        <button class="primary" id="btnIngest">本地向量化并写入 seekdb</button>
+        <button class="ghost" id="btnReset">清空知识库</button>
+      </div>
+      <div class="dim-note">文档在浏览器本地完成向量化（不调用云端推理），向量+原文写入 seekdb。</div>
+    </div>
+
+    <!-- 检索 -->
+    <div class="card">
+      <h2>② 混合检索</h2>
+      <input type="text" id="queryInput" placeholder="输入查询，例如：什么是混合搜索？" />
+      <div class="row">
+        <button class="primary" id="btnSearch">检索（向量+全文混合）</button>
+      </div>
+      <div id="results" style="margin-top:14px;"></div>
+    </div>
+
+    <!-- 性能 -->
+    <div class="card">
+      <h2>③ 性能数据（量化与检索）</h2>
+      <table class="perf" id="perfTable">
+        <thead>
+          <tr><th>指标</th><th>值</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>模型加载耗时</td><td id="pLoad">-</td></tr>
+          <tr><td>模型体积（量化后）</td><td id="pSize">-</td></tr>
+          <tr><td>文档向量化吞吐</td><td id="pThroughput">-</td></tr>
+          <tr><td>端到端查询延迟</td><td id="pQuery">-</td></tr>
+          <tr><td>推理后端</td><td id="pBackend">-</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+
+  <script type="module" src="/js/app.js"></script>
+</body>
+</html>
