@@ -97,6 +97,7 @@ from powercontext.builtin.persistence.processing_migration import (
     bootstrap_processing_schema,
 )
 from powercontext.builtin.persistence.scope_search_schema import ensure_scope_search_schema
+from powercontext.builtin.persistence.seekdb.hybrid_index import SeekDBHybridMemoryIndex
 from powercontext.builtin.persistence.seekdb.profile import SeekDBConfig, SeekDBProfile
 from powercontext.builtin.persistence.skill_distribution_schema import ensure_skill_distribution_schema
 from powercontext.builtin.persistence.source_lifecycle_schema import ensure_source_lifecycle_schema
@@ -982,10 +983,16 @@ async def open_builtin_contexts(
                 await contexts.aclose_usage_recorder()
         return
     experience_index = OceanBaseExperienceFTSIndex()
-    indexes = [OceanBaseMemoryFTSIndex()]
-    if embedding_model is not None:
-        indexes.append(OceanBaseMemoryVectorIndex(embedding_model.profile))
-    index = CompositeMemoryIndex(*indexes)
+    lexical_index = OceanBaseMemoryFTSIndex()
+    semantic_index = None if embedding_model is None else OceanBaseMemoryVectorIndex(embedding_model.profile)
+    if isinstance(database, SeekDBConfig) and semantic_index is not None:
+        # seekdb returns both candidate lists from one statement, so the hybrid path pays a
+        # single round trip while the single-channel paths stay on the frozen queries.
+        index: MemoryIndex = SeekDBHybridMemoryIndex(fts=lexical_index, vector=semantic_index)
+    elif semantic_index is None:
+        index = CompositeMemoryIndex(lexical_index)
+    else:
+        index = CompositeMemoryIndex(lexical_index, semantic_index)
     topic_indexes: list[TopicMemoryIndex] = [OceanBaseTopicMemoryFTSIndex()]
     if embedding_model is not None:
         topic_indexes.append(OceanBaseTopicMemoryVectorIndex(embedding_model.profile))
