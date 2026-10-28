@@ -68,6 +68,7 @@ from powercontext.builtin.runtime.processing_contracts import (
     WorkerEntrypoint,
 )
 from powercontext.builtin.runtime.protocols import RuntimeTracing
+from powercontext.builtin.runtime.source_count_admission import scopes_reaching_source_count
 
 logger = logging.getLogger(__name__)
 _OCEANBASE_TICK_SECONDS = 1.0
@@ -80,6 +81,8 @@ _RETRY_STATE_LIMIT = 1000
 _CHANNEL_QUEUE_LIMIT = _DISCOVERY_PAGE_SIZE // 2
 _DISCOVERY_PAGE_DELAY_SECONDS = 0.01
 _DISCOVERY_TIMEOUT_SECONDS = 2.0
+_COUNT_GATE_TICK_SECONDS = 0.25
+_COUNT_GATE_PAGE_SIZE = 100
 _SPAWN_SIGTERM_GRACE_SECONDS = 1.0
 _WORKER_SHUTDOWN_TIMEOUT_SECONDS = 5.0
 ProcessingKey = tuple[str, str]
@@ -117,6 +120,9 @@ class ArtifactProcessingBinding:
     # Only automatic admission is filtered; already accepted requests retain
     # their own Worker authorization and domain completion semantics.
     automatic_scope_filter: Callable[[AsyncConnection, tuple[str, ...]], Awaitable[frozenset[str]]] | None = None
+    # An OR condition beside the time schedule: admit one invocation as soon as
+    # this many Journal identities wait past the Family's committed cursor.
+    automatic_source_count_threshold: int | None = None
 
     def __post_init__(self) -> None:
         if not self.binding_name or self.binding_name != self.binding_name.strip():
@@ -131,6 +137,10 @@ class ArtifactProcessingBinding:
             raise ValueError("max_workers must be a positive integer")  # noqa: TRY003
         if self.worker_timeout_seconds <= 0:
             raise ValueError("worker_timeout_seconds must be positive")  # noqa: TRY003
+        if self.automatic_source_count_threshold is not None and (
+            type(self.automatic_source_count_threshold) is not int or self.automatic_source_count_threshold < 1
+        ):
+            raise ValueError("automatic_source_count_threshold must be a positive integer")  # noqa: TRY003
         if self.automatic_processing_interval is not None:
             if self.automatic_processing_interval.total_seconds() <= 0:
                 raise ValueError("automatic interval must be positive")  # noqa: TRY003
@@ -443,6 +453,11 @@ class ArtifactProcessingSupervisor:
             raise ValueError("dedicated Supervisor must own exactly its named Family")  # noqa: TRY003
         self._database = database
         self._families = {binding.binding_name: _FamilyState(binding) for binding in bindings}
+        # Captures only publish durable counters, so a count threshold cannot
+        # rely on an in-process notification. Bound the idle wait instead.
+        self._count_gate = any(
+            binding.automatic_source_count_threshold is not None for binding in bindings
+        )
         self._lease_mode = lease_mode
         self._supervisor_group = supervisor_group
         self._intents = intents or ArtifactProcessingIntentRepository()
@@ -612,6 +627,17 @@ class ArtifactProcessingSupervisor:
             await self._reap(state)
             if self._fence is None or self._lease_lost:
                 raise ArtifactProcessingLeadershipLostError(self._supervisor_group, self.holder_id, 0)
+            try:
+                await self._admit_by_source_count(state)
+            except ArtifactProcessingLeadershipLostError:
+                raise
+            except Exception as error:
+                # Counting is an admission hint, never leadership evidence: a
+                # transient read failure must not drop an accepted wave.
+                state.degraded = True
+                self._log_failure(state, None, error, "source_count_admission")
+            if self._fence is None or self._lease_lost:
+                raise ArtifactProcessingLeadershipLostError(self._supervisor_group, self.holder_id, 0)
             now = asyncio.get_running_loop().time()
             # Reserve fresh admission before retries can occupy a newly freed
             # Worker. FIFO ready order then shares execution between channels.
@@ -635,6 +661,39 @@ class ArtifactProcessingSupervisor:
                     state.discovery_seconds = asyncio.get_running_loop().time() - now
             await self._activate_retries(state)
             await self._dispatch(state)
+
+    async def _admit_by_source_count(self, state: _FamilyState) -> None:
+        """Accept one invocation per Scope whose pending Journal count reaches the threshold.
+
+        The gate is an OR beside the time schedule and shares the requested
+        channel with explicit flushes, so a window that leaves work behind is
+        re-judged from its new cursor rather than forced to drain. Nothing is
+        admitted while a Scope already owns an unhandled acceptance, which
+        keeps retries and accepted waves on their original path.
+        """
+
+        threshold = state.binding.automatic_source_count_threshold
+        if threshold is None:
+            return
+        admitted: list[str] = []
+        async with self._database.transaction() as connection:
+            await self._leases.require_fence(connection, self._require_current_fence())
+            candidates = await scopes_reaching_source_count(
+                connection,
+                state.binding.binding_name,
+                threshold,
+                limit=_COUNT_GATE_PAGE_SIZE,
+            )
+            for scope in candidates:
+                if scope in state.running or scope in state.queued or scope in state.retries:
+                    continue
+                intent = await self._intents.load(connection, scope, state.binding.binding_name, for_update=True)
+                if intent is None or intent.requested_generation > intent.handled_generation:
+                    continue
+                await self._intents.request(connection, scope, state.binding.binding_name)
+                admitted.append(scope)
+        if admitted:
+            self.wake(state.binding.binding_name)
 
     async def _discover(self, state: _FamilyState) -> None:
         binding = state.binding
@@ -1080,6 +1139,8 @@ class ArtifactProcessingSupervisor:
             return self._tick
         now = asyncio.get_running_loop().time()
         deadlines: list[float] = []
+        if self._count_gate:
+            deadlines.append(now + _COUNT_GATE_TICK_SECONDS)
         for state in self._families.values():
             if len(state.running) >= state.binding.max_workers:
                 continue

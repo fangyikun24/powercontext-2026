@@ -135,8 +135,30 @@ class RuntimeConfig(BaseModel):
             raise ValueError("Worker quota must be a positive integer")  # noqa: TRY003, TRY004 - Pydantic validation
         return value
 
+    @field_validator(
+        "memory_source_count_threshold",
+        "topic_memory_source_count_threshold",
+        mode="before",
+    )
+    @classmethod
+    def validate_optional_source_count_threshold(cls, value: Any) -> Any:
+        """Reject every non-integer or non-positive Source-count admission threshold."""
+
+        if value is None:
+            return None
+        if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+            raise ValueError(  # noqa: TRY003 - Pydantic validation
+                "Source count thresholds must be positive integers or None"
+            )
+        return value
+
     scope_cache_size: int = Field(default=DEFAULT_SCOPE_CACHE_SIZE, ge=1)
     source_window_limit: int = Field(default=100, ge=1)
+    # ``None`` keeps the previous time-only admission. A positive integer admits
+    # one invocation as soon as that many Journal identities wait past the
+    # Family's last committed Source cursor.
+    memory_source_count_threshold: int | None = None
+    topic_memory_source_count_threshold: int | None = None
     context_assembly_max_entries: int = Field(default=8, ge=1)
     memory_extraction_profile: MemoryExtractionProfile = MemoryExtractionProfile.CODING
     memory_rerank_enabled: bool = False

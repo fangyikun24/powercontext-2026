@@ -567,6 +567,7 @@ async def open_builtin_runtime(
                         else b.automatic_processing_interval.total_seconds(),
                         "cron": b.cron,
                         "timezone": b.timezone,
+                        "source_count_threshold": b.automatic_source_count_threshold,
                     }
                     for b in processing_bindings
                 ],
@@ -734,6 +735,23 @@ def _artifact_processing_bindings(  # noqa: C901 - validate and assemble one reg
                 "profile": "scheduled-profile-generation",
             }[family]
             raise BuiltinConfigurationError(issue)
+    # A count threshold is an admission condition, so it needs the same owning
+    # Family a time schedule does.
+    for family, count_threshold in (
+        ("memory", config.runtime.memory_source_count_threshold),
+        ("topic-memory", config.runtime.topic_memory_source_count_threshold),
+    ):
+        if count_threshold is None or family in declared | registered:
+            continue
+        if (
+            family == "topic-memory"
+            and config.runtime.artifact_processing_families is None
+            and config.inference.generation_model is not None
+        ):
+            validate_topic_memory_provider_settings(config.inference)
+        raise BuiltinConfigurationError(
+            "scheduled-pipeline" if family == "memory" else "topic-memory-generation"
+        )
     if config.runtime.artifact_processing_role == "api":
         return tuple(configured)
     _validate_processing_source_registry(config, configured, source_registry)
@@ -787,6 +805,7 @@ def _artifact_processing_bindings(  # noqa: C901 - validate and assemble one reg
                 if family == "skill"
                 else SourceProcessingPendingProvider(contexts.database, binding, family),
                 automatic_scope_filter=enabled_profile_scopes if family == "profile" else None,
+                automatic_source_count_threshold=getattr(config.runtime, f"{prefix}_source_count_threshold", None),
             )
         )
     _validate_processing_registrations(configured)
