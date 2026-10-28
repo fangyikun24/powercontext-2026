@@ -1,156 +1,217 @@
-# Dify DSL —— 脑洞制造机（Idea Engine）
-# 赛道：Dify —— Just for Fun：好玩的智能应用
-# 应用类型：工作流（Workflow）
-# 说明：本 DSL 可在 Dify 云端版直接导入运行。核心流程：
-#   start(主题) → memory 节点(PowerContext HTTP 检索历史脑洞，记忆复用) → LLM(生成3个脑洞创意)
-#   → 保存到 PowerContext 记忆(HTTP) → end(输出)
-# 注意：DSL 中的 HTTP 节点地址/鉴权按你的环境修改；未配置 PowerContext 时可把 memory 节点设为可选/跳过。
-
-app:
-  version: 0.1.0
-  name: 脑洞制造机 Idea Engine
-  description: 输入一个主题，AI 给你 3 个离谱又合理的神奇脑洞。结合 PowerContext 记忆，灵感可持续复用。
-  mode: workflow
-  workflow:
-    graph:
-      nodes:
-        - id: start
+kind: app
+version: 0.3.0
+workflow:
+  conversation_variables: []
+  environment_variables:
+    - id: POWERCONTEXT_URL
+      name: POWERCONTEXT_URL
+      value: http://127.0.0.1:8000
+      value_type: string
+  features:
+    file_upload:
+      enabled: false
+    opening_statement: ""
+    suggested_questions:
+      - 会飞的冰箱
+      - 周一的早晨
+      - 手机充电
+    speech_to_text:
+      enabled: false
+    text_to_speech:
+      enabled: false
+    retriever_resource:
+      enabled: false
+    sensitive_word_avoidance:
+      enabled: false
+  graph:
+    nodes:
+      - data:
+          desc: 输入任意主题，AI 生成 3 个离谱但自洽的创意脑洞
+          title: 开始
           type: start
-          data:
-            title: 开始
-            variables:
-              - variable: topic
-                label: 主题
-                type: paragraph
-                required: true
-                max_length: 200
-            output_variables: []
-
-        - id: memory_retrieve
+          variables:
+            - label: 主题
+              max_length: 200
+              options: []
+              required: true
+              type: paragraph
+              variable: topic
+          output_variables: []
+        id: start
+        position:
+          x: 100
+          y: 300
+        type: custom
+        width: 244
+        height: 90
+      - data:
+          desc: 从 PowerContext 检索历史脑洞（记忆复用），返回相关记录
+          title: 检索历史脑洞（PowerContext）
           type: http-request
-          data:
-            title: 检索历史脑洞（PowerContext 记忆复用）
-            method: post
-            url: http://127.0.0.1:8000/v1/memory/search
-            headers: '{"Content-Type": "application/json"}'
-            params: ''
-            body:
-              type: json
-              data: |
-                {
-                  "scope_id": "project:dify-idea-engine",
-                  "query": "{{#start.topic#}}",
-                  "limit": 5
-                }
-            timeout: 10
-            output_variable: memory_hits
-          position:
-            x: 120
-            y: 220
-
-        - id: llm_generate
+          url: http://127.0.0.1:8000/v1/memory/search
+          method: post
+          headers: '{"Content-Type": "application/json"}'
+          params: ""
+          body:
+            type: json
+            data: |
+              {
+                "scope_id": "project:dify-idea-engine",
+                "query": "{{#start.topic#}}",
+                "limit": 5
+              }
+          timeout:
+            max_connect_timeout: 5
+            max_read_timeout: 10
+            max_write_timeout: 10
+          authorization:
+            type: no-auth
+          output_variable: memory_hits
+        id: memory_retrieve
+        position:
+          x: 400
+          y: 300
+        type: custom
+        width: 244
+        height: 120
+      - data:
+          desc: 生成 3 个离谱但自洽的创意方案
+          title: 脑洞生成
           type: llm
-          data:
-            title: 生成脑洞创意
-            model:
-              provider: __env__  # 由 Dify 运行时模型提供商决定（如 OpenAI/deepseek/本地）
-              name: __env__
-            prompt_template:
-              - role: system
-                text: |
-                  你是「脑洞制造机」：给定主题，输出 3 个「离谱但自洽」的创意方案。
-                  每个创意：名称 + 一句话玩法/原理 + 为什么有趣。用简洁中文，编号 1/2/3。
-                  如果检索到历史脑洞（见【历史记忆】），避免重复并在此基础上续写。
-              - role: user
-                text: |
-                  主题：{{#start.topic#}}
+          context:
+            enabled: false
+            variable_selector: []
+          model:
+            completion_params:
+              max_tokens: 1500
+              temperature: 0.8
+            mode: chat
+            name: gpt-4o-mini
+            provider: openai
+          prompt_template:
+            - id: system-prompt
+              role: system
+              text: |
+                你是「脑洞制造机」：给定主题，输出 3 个「离谱但自洽」的创意方案。
+                每个创意：名称 + 一句话玩法/原理 + 为什么有趣。用简洁中文，编号 1/2/3。
+                如果检索到历史脑洞（见【历史记忆】），避免重复并在此基础上续写。
+            - id: user-prompt
+              role: user
+              text: |
+                主题：{{#start.topic#}}
 
-                  【历史记忆】
-                  {{#memory_retrieve.body#}}
+                【历史记忆】
+                {{#memory_retrieve.body#}}
 
-                  请开始。
-            variables:
-              - variable: memory_retrieve.body
-                value_selector:
-                  - memory_retrieve
-                  - body
-            outputs: []
-          position:
-            x: 360
-            y: 220
-
-        - id: memory_save
+                请开始。
+          vision:
+            enabled: false
+          variables: []
+        id: llm_generate
+        position:
+          x: 700
+          y: 300
+        type: custom
+        width: 244
+        height: 120
+      - data:
+          desc: 把本次生成的脑洞保存到 PowerContext 记忆
+          title: 保存脑洞到 PowerContext
           type: http-request
-          data:
-            title: 保存本次脑洞（PowerContext 记忆）
-            method: post
-            url: http://127.0.0.1:8000/v1/memory/remember
-            headers: '{"Content-Type": "application/json"}'
-            params: ''
-            body:
-              type: json
-              data: |
-                {
-                  "scope_id": "project:dify-idea-engine",
-                  "kind": "idea",
-                  "text": "主题：{{#start.topic#}} 生成：{{#llm_generate.text#}}"
-                }
-            timeout: 10
-            output_variable: save_result
-          position:
-            x: 600
-            y: 220
+          url: http://127.0.0.1:8000/v1/memory/remember
+          method: post
+          headers: '{"Content-Type": "application/json"}'
+          params: ""
+          body:
+            type: json
+            data: |
+              {
+                "scope_id": "project:dify-idea-engine",
+                "kind": "idea",
+                "text": "主题：{{#start.topic#}} 生成：{{#llm_generate.text#}}"
+              }
+          timeout:
+            max_connect_timeout: 5
+            max_read_timeout: 10
+            max_write_timeout: 10
+          authorization:
+            type: no-auth
+          output_variable: save_result
+        id: memory_save
+        position:
+          x: 1000
+          y: 300
+        type: custom
+        width: 244
+        height: 120
+      - data:
+          desc: 输出创意与记忆状态
+          title: 直接回复
+          type: answer
+          answer: |
+            {{#llm_generate.text#}}
 
-        - id: end
-          type: end
-          data:
-            title: 输出创意
-            output_variables:
-              - variable: result
-                value_selector:
-                  - llm_generate
-                  - text
-              - variable: memory_note
-                value_selector:
-                  - memory_save
-                  - body
-          position:
-            x: 840
-            y: 220
-
-      edges:
-        - source: start
+            ---
+            （本次脑洞已保存到 PowerContext 记忆；下次输入相近主题时会在此基础上续写。）
+          variables: []
+        id: answer
+        position:
+          x: 1300
+          y: 300
+        type: custom
+        width: 244
+        height: 90
+    edges:
+      - data:
+          isInIteration: false
+          isInLoop: false
+          sourceType: start
+          targetType: http-request
+          id: start-source-memory_retrieve-target
+          source: start
+          sourceHandle: source
           target: memory_retrieve
-          id: e1
-        - source: memory_retrieve
+          targetHandle: target
+          type: custom
+          zIndex: 0
+      - data:
+          isInIteration: false
+          isInLoop: false
+          sourceType: http-request
+          targetType: llm
+          id: memory_retrieve-source-llm_generate-target
+          source: memory_retrieve
+          sourceHandle: source
           target: llm_generate
-          id: e2
-        - source: llm_generate
+          targetHandle: target
+          type: custom
+          zIndex: 0
+      - data:
+          isInIteration: false
+          isInLoop: false
+          sourceType: llm
+          targetType: http-request
+          id: llm_generate-source-memory_save-target
+          source: llm_generate
+          sourceHandle: source
           target: memory_save
-          id: e3
-        - source: memory_save
-          target: end
-          id: e4
-
-    features:
-      file_upload:
-        enabled: false
-      opening_statement: ""
-      suggested_questions: []
-      speech_to_text:
-        enabled: false
-      text_to_speech:
-        enabled: false
-      retriever_resource:
-        enabled: false
-      sensitive_word_avoidance:
-        enabled: false
-
-    settings:
-      error_strategy: fail-branch
-      conversation_variables: []
-    environment:
-      context:
-        enabled: false
-      history:
-        enabled: false
+          targetHandle: target
+          type: custom
+          zIndex: 0
+      - data:
+          isInIteration: false
+          isInLoop: false
+          sourceType: http-request
+          targetType: answer
+          id: memory_save-source-answer-target
+          source: memory_save
+          sourceHandle: source
+          target: answer
+          targetHandle: target
+          type: custom
+          zIndex: 0
+  settings:
+    error_strategy: fail-branch
+    tool_call_permits: []
+    workflow_permits: []
+    system_variables: []
