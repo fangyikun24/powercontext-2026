@@ -77,10 +77,13 @@ class _Call:
 class _Slot:
     """One distinct text and every caller currently waiting for its vector."""
 
-    __slots__ = ("waiters",)
+    __slots__ = ("batch", "waiters")
 
     def __init__(self) -> None:
         self.waiters: list[Waiter] = []
+        # Set once the text is owned by a dispatched request, so a caller that
+        # arrives later still attributes usage to the batch it waited on.
+        self.batch: _Batch | None = None
 
 
 class _Batch:
@@ -119,6 +122,7 @@ class CoalescingEmbeddingModel:
         # Texts owned by a request that is still running; late callers join it.
         self._active: dict[str, _Slot] = {}
         self._flush_handle: asyncio.Handle | None = None
+        self._loop: asyncio.AbstractEventLoop | None = None
 
     async def embed(self, texts: tuple[str, ...], /) -> EmbeddingResult:
         """Return one ordered vector per input text, reusing cached and shared work."""
@@ -127,6 +131,7 @@ class CoalescingEmbeddingModel:
         if not items:
             return EmbeddingResult(vectors=(), usage=InferenceUsage(requests=0))
         loop = asyncio.get_running_loop()
+        self._bind_loop(loop)
         call = _Call()
         futures: dict[str, asyncio.Future[EmbeddingVector]] = {}
         scheduled = False
@@ -147,6 +152,11 @@ class CoalescingEmbeddingModel:
                     self._pending[text] = slot
                     self._queue.append(text)
                     scheduled = True
+            elif slot.batch is not None:
+                # Joining a request that is already running: this caller waited
+                # on that batch, so charge it once, exactly like the callers
+                # that were present when it was dispatched.
+                call.batches[id(slot.batch)] = slot.batch
             waiter: asyncio.Future[EmbeddingVector] = loop.create_future()
             slot.waiters.append((waiter, call))
             futures[text] = waiter
@@ -157,6 +167,23 @@ class CoalescingEmbeddingModel:
             vectors=tuple(futures[text].result() for text in items),
             usage=_aggregate_usage(call),
         )
+
+    def _bind_loop(self, loop: asyncio.AbstractEventLoop) -> None:
+        """Drop transient state that belonged to a different, already closed loop.
+
+        A merge handle is bound to the loop that created it: if a scenario ends
+        while a window is still open the handle can never fire, and keeping it
+        would make every later call wait for a flush that cannot happen. The
+        vector cache holds no loop state, so it survives the switch.
+        """
+
+        if self._loop is loop:
+            return
+        self._loop = loop
+        self._pending.clear()
+        self._queue.clear()
+        self._active.clear()
+        self._flush_handle = None
 
     def _schedule_flush(self, loop: asyncio.AbstractEventLoop) -> None:
         if self._flush_handle is not None:
@@ -189,6 +216,7 @@ class CoalescingEmbeddingModel:
                 continue
             batch = _Batch(tuple(chunk), tuple(slots))
             for slot in slots:
+                slot.batch = batch
                 for _, call in slot.waiters:
                     call.batches[id(batch)] = batch
             asyncio.ensure_future(self._run_batch(batch))
