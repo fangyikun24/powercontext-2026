@@ -1,0 +1,18 @@
+=== 0. 健康检查 ===
+GET /health/live -> 200 {"status": "ok"}
+
+=== 1. remember：保存脑洞记忆 ===
+POST /v1/memory/remember -> 200 {"records": [{"artifact": "memory-3", "content": "主题：会飞的冰箱 生成：1.冷链快递员 2.空中菜市场 3.冰箱地铁", "state": "active", "state_version": 1}]}
+POST /v1/memory/remember -> 200 {"records": [{"artifact": "memory-4", "content": "主题：周一的早晨 生成：1.赖床缓冲器 2.咖啡胶囊舱 3.通勤悬浮舱", "state": "active", "state_version": 1}]}
+
+=== 2. search：检索相关记忆（记忆复用） ===
+POST /v1/memory/search -> 200
+  [score=1.0000] 主题：会飞的冰箱 生成：1.冷链快递员 2.空中菜市场 3.冰箱地铁
+  [score=1.0000] 主题：会飞的冰箱 生成：1.冷链快递员 2.空中菜市场 3.冰箱地铁
+  [score=0.0000] 主题：周一的早晨 生成：1.赖床缓冲器 2.咖啡胶囊舱 3.通勤悬浮舱
+
+=== 3. search：相近主题续写检索（第二次查询） ===
+POST /v1/memory/search -> 200
+  [score=1.0000] 主题：会飞的冰箱 生成：1.冷链快递员 2.空中菜市场 3.冰箱地铁
+  [score=1.0000] 主题：会飞的冰箱 生成：1.冷链快递员 2.空中菜市场 3.冰箱地铁
+  [score=0.0000] 主题：周一的早晨 生成：1.赖床缓冲器 2.咖啡胶囊舱 3.通勤悬浮舱
