@@ -254,12 +254,18 @@ async def search_pdf_pages(
 
     Two structural priors break the remaining ties in favour of the pages a report reader would
     open: a page that carries a primary-statement caption, and a page dense with fiscal-year
-    columns. A third prior covers a case lexical overlap cannot reach: a question that asks who
-    the customers are is answered by the concentration disclosure ("a limited number of commercial
-    airlines", "40% of our revenues were earned pursuant to ... contracts"), which never repeats
-    the word "customer". The wording is preferred only when the question itself asks about that
-    dependence, so unrelated questions are unaffected. All three are properties of the document
-    and of the question, not of any expected answer.
+    columns. Two further priors cover what lexical overlap cannot reach, each switched on only
+    by the question's own topic. A question that asks who the customers are is answered by the
+    concentration disclosure ("a limited number of commercial airlines", "one customer accounted
+    for 16% of our consolidated net revenue"), which need not repeat the word "customer". A
+    question about product or service lines is answered by the segment note, where revenue is
+    split by reportable segment. All of them are properties of the document and of the question,
+    not of any expected answer.
+
+    Finally, one database may hold several reports. Scores from different filings are not on a
+    common scale, so the report the question is about is chosen first, on report-level terms,
+    and pages from the other reports are discounted rather than dropped. With a single report
+    there is nothing to choose between and no discount is applied.
     """
 
     if not isinstance(question, str) or not question.strip():
@@ -286,7 +292,10 @@ _CONCENTRATION_DISCLOSURE = re.compile(
     r"(?:significant|substantial|large|limited|material|major|vast)\s+"
     r"(?:portion|number|amount|percentage|part)\s+of\s+(?:our|its|the|total|consolidated)?\s*"
     r"(?:revenues?|sales|business|operating\s+revenues?)"
-    r"|\d{1,3}(?:\.\d+)?\s*%\s+of\s+(?:our|its|the)?\s*(?:total\s+)?(?:revenues?|sales)"
+    r"|\d{1,3}(?:\.\d+)?\s*%\s+of\s+(?:our|its|the)?\s*"
+    r"(?:(?:total|consolidated|net|combined|annual|operating)\s+)*(?:revenues?|sales)"
+    r"|(?:one|two|three|four|five|no|a\s+single|any\s+single)\s+customers?\s+"
+    r"(?:accounted|representing|represented|comprising|comprised|generating|generated)"
     r"|concentration\s+(?:of\s+)?(?:credit\s+)?risk|customer\s+concentration"
 )
 #: Question terms that make the concentration disclosure the right page to prefer.
@@ -305,13 +314,43 @@ _CONCENTRATION_TOPICS = frozenset({
 })
 _FISCAL_YEAR_TERM = re.compile(r"fy(\d{4})")
 _YEAR_TOKEN = re.compile(r"\b(?:19|20)\d{2}\b")
+#: How a filing opens its segment note. A question that asks which product or service line
+#: carries the revenue is answered here, where the revenue is split by reportable segment.
+_SEGMENT_DISCLOSURE = re.compile(
+    r"summary\s+of\s+(?:business\s+)?segment|business\s+segments?(?:\s+data)?"
+    r"|segment\s+(?:information|reporting|results|data|revenues?|operating|assets|profit)"
+    r"|reportable\s+segments?"
+)
+#: Question terms that make the segment note the page to prefer.
+_SEGMENT_TOPICS = frozenset({
+    "brand",
+    "brands",
+    "categor",
+    "categories",
+    "category",
+    "offering",
+    "offerings",
+    "portfolio",
+    "product",
+    "products",
+    "segment",
+    "segments",
+    "service",
+    "services",
+})
 _CAPTION_WINDOW = 400
 _MIN_TABLE_YEARS = 6
 _CAPTION_BOOST = 8.0
 _TABLE_BOOST = 2.0
 _CONCENTRATION_BOOST = 2.0
+_SEGMENT_BOOST = 2.0
 _BM25_K1 = 1.2
 _BM25_B = 0.75
+#: One database can hold several reports. Pages from the report the question is about outrank
+#: pages from the others, but the others are discounted rather than dropped: routing is a
+#: judgement about wording, and a wrong guess must not hide the right page entirely.
+_ROUTE_B = 0.6
+_ROUTE_DISCOUNT = 0.35
 _EXPANSION_WEIGHT = 1.0
 _INDEX_CACHE_SIZE = 4
 
@@ -386,7 +425,7 @@ _TOPIC_EXPANSIONS: tuple[tuple[tuple[str, ...], tuple[str, ...]], ...] = (
 class _IndexedPage:
     """One stored page prepared for lexical scoring."""
 
-    __slots__ = ("caption", "citation", "concentration", "counts", "length", "table")
+    __slots__ = ("caption", "citation", "concentration", "counts", "document", "length", "segment", "table")
 
     def __init__(
         self,
@@ -396,6 +435,8 @@ class _IndexedPage:
         caption: bool,
         table: bool,
         concentration: bool,
+        document: str,
+        segment: bool,
     ) -> None:
         self.citation = citation
         self.counts = counts
@@ -403,12 +444,21 @@ class _IndexedPage:
         self.caption = caption
         self.table = table
         self.concentration = concentration
+        self.document = document
+        self.segment = segment
 
 
 class _CorpusIndex:
     """BM25 index over every page the scoped Memory currently holds."""
 
-    __slots__ = ("pages", "average_length", "document_frequency")
+    __slots__ = (
+        "average_length",
+        "document_frequency",
+        "document_lengths",
+        "documents",
+        "pages",
+        "vocabulary_documents",
+    )
 
     def __init__(self, pages: tuple[_IndexedPage, ...]) -> None:
         self.pages = pages
@@ -420,40 +470,51 @@ class _CorpusIndex:
                 document_frequency[term] = document_frequency.get(term, 0) + 1
         self.document_frequency = document_frequency
         self.average_length = (total / len(pages)) if pages else 0.0
+        documents: dict[str, dict[str, int]] = {}
+        document_lengths: dict[str, int] = {}
+        for page in pages:
+            counts = documents.setdefault(page.document, {})
+            for term, frequency in page.counts.items():
+                counts[term] = counts.get(term, 0) + frequency
+            document_lengths[page.document] = document_lengths.get(page.document, 0) + page.length
+        self.documents = documents
+        self.document_lengths = document_lengths
+        vocabulary_documents: dict[str, int] = {}
+        for counts in documents.values():
+            for term in counts:
+                vocabulary_documents[term] = vocabulary_documents.get(term, 0) + 1
+        self.vocabulary_documents = vocabulary_documents
 
-    @classmethod
-    def build(cls, records: Any) -> _CorpusIndex:
-        """Index the stored pages, scoring the year columns against the document's own years."""
+    def _routed_document(self, weighted: tuple[tuple[str, float], ...]) -> str | None:
+        """Return the report the question is about, or ``None`` when there is only one.
 
-        prepared: list[tuple[Any, dict[str, int], int, bool, list[str], bool]] = []
-        year_totals: dict[str, int] = {}
-        for record in records:
-            _header, _, body = record.entry.text.partition("\n")
-            counts: dict[str, int] = {}
-            length = 0
-            for term in _tokenize(body):
-                counts[term] = counts.get(term, 0) + 1
-                length += 1
-            lowered = " ".join(body.lower().split())
-            caption = _STATEMENT_CAPTION.search(lowered[:_CAPTION_WINDOW]) is not None
-            concentration = _CONCENTRATION_DISCLOSURE.search(lowered) is not None
-            years = _YEAR_TOKEN.findall(body)
-            for year in years:
-                year_totals[year] = year_totals.get(year, 0) + 1
-            prepared.append((record.citation, counts, length, caption, years, concentration))
-        dominant = {year for year, _count in sorted(year_totals.items(), key=lambda item: -item[1])[:2]}
-        pages = tuple(
-            _IndexedPage(
-                citation,
-                counts,
-                length,
-                caption,
-                sum(1 for year in years if year in dominant) >= _MIN_TABLE_YEARS,
-                concentration,
-            )
-            for citation, counts, length, caption, years, concentration in prepared
-        )
-        return cls(pages)
+        A question written about a filing names the company somewhere, so that name appears in
+        one report and practically nowhere else. Scoring whole reports on their own terms keeps
+        that name decisive instead of letting it drown among the words every filing repeats.
+        ``None`` means "do not discount anything", which is also the answer for a database that
+        holds a single report: there is nothing to choose between.
+        """
+
+        if len(self.documents) < 2:
+            return None
+        total = len(self.documents)
+        average = (sum(self.document_lengths.values()) / total) or 1.0
+        best_document: str | None = None
+        best_value = 0.0
+        for document, counts in self.documents.items():
+            length = self.document_lengths.get(document) or 1
+            normalisation = _BM25_K1 * (1.0 - _ROUTE_B + _ROUTE_B * length / average)
+            value = 0.0
+            for term, weight in weighted:
+                frequency = counts.get(term)
+                if not frequency:
+                    continue
+                held_by = self.vocabulary_documents.get(term, 0)
+                inverse = math.log(1.0 + (total - held_by + 0.5) / (held_by + 0.5))
+                value += weight * inverse * frequency * (_BM25_K1 + 1.0) / (frequency + normalisation)
+            if value > best_value:
+                best_document, best_value = document, value
+        return best_document if best_value > 0.0 else None
 
     def search(self, question: str, limit: int) -> tuple[Any, ...]:
         weighted = _question_terms(question)
@@ -467,6 +528,8 @@ class _CorpusIndex:
         }
         weight_of = dict(weighted)
         asks_about_dependence = bool(weight_of.keys() & _CONCENTRATION_TOPICS)
+        asks_about_segments = bool(weight_of.keys() & _SEGMENT_TOPICS)
+        routed = self._routed_document(weighted)
         average = self.average_length or 1.0
         scored: list[tuple[float, int]] = []
         for position, page in enumerate(self.pages):
@@ -486,13 +549,56 @@ class _CorpusIndex:
                 )
             if asks_about_dependence and page.concentration:
                 value *= _CONCENTRATION_BOOST
+            if asks_about_segments and page.segment:
+                value += _SEGMENT_BOOST
             if page.caption:
                 value += _CAPTION_BOOST
             if page.table:
                 value += _TABLE_BOOST
+            if routed is not None and page.document != routed:
+                value *= _ROUTE_DISCOUNT
             scored.append((value, position))
         scored.sort(key=lambda item: (-item[0], item[1]))
         return tuple(self.pages[position].citation for _, position in scored[:limit])
+
+    @classmethod
+    def build(cls, records: Any) -> _CorpusIndex:
+        """Index the stored pages, scoring the year columns against the document's own years."""
+
+        prepared: list[tuple[Any, dict[str, int], int, bool, list[str], bool, str, bool]] = []
+        year_totals: dict[str, int] = {}
+        for record in records:
+            # The projection fixes the layout as ``DOCUMENT_ID\nPAGE_TEXT``, so the first line
+            # is the identity of the report this page belongs to.
+            header, _, body = record.entry.text.partition("\n")
+            counts: dict[str, int] = {}
+            length = 0
+            for term in _tokenize(body):
+                counts[term] = counts.get(term, 0) + 1
+                length += 1
+            lowered = " ".join(body.lower().split())
+            caption = _STATEMENT_CAPTION.search(lowered[:_CAPTION_WINDOW]) is not None
+            concentration = _CONCENTRATION_DISCLOSURE.search(lowered) is not None
+            segment = _SEGMENT_DISCLOSURE.search(lowered[:_CAPTION_WINDOW]) is not None
+            years = _YEAR_TOKEN.findall(body)
+            for year in years:
+                year_totals[year] = year_totals.get(year, 0) + 1
+            prepared.append((record.citation, counts, length, caption, years, concentration, header, segment))
+        dominant = {year for year, _count in sorted(year_totals.items(), key=lambda item: -item[1])[:2]}
+        pages = tuple(
+            _IndexedPage(
+                citation,
+                counts,
+                length,
+                caption,
+                sum(1 for year in years if year in dominant) >= _MIN_TABLE_YEARS,
+                concentration,
+                header,
+                segment,
+            )
+            for citation, counts, length, caption, years, concentration, header, segment in prepared
+        )
+        return cls(pages)
 
 
 _CORPUS_CACHE: dict[tuple[Any, ...], _CorpusIndex] = {}
