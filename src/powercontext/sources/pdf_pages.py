@@ -254,7 +254,12 @@ async def search_pdf_pages(
 
     Two structural priors break the remaining ties in favour of the pages a report reader would
     open: a page that carries a primary-statement caption, and a page dense with fiscal-year
-    columns. Both are properties of the document, not of any expected answer.
+    columns. A third prior covers a case lexical overlap cannot reach: a question that asks who
+    the customers are is answered by the concentration disclosure ("a limited number of commercial
+    airlines", "40% of our revenues were earned pursuant to ... contracts"), which never repeats
+    the word "customer". The wording is preferred only when the question itself asks about that
+    dependence, so unrelated questions are unaffected. All three are properties of the document
+    and of the question, not of any expected answer.
     """
 
     if not isinstance(question, str) or not question.strip():
@@ -274,12 +279,37 @@ _STATEMENT_CAPTION = re.compile(
     r"stockholders'?\s+equity|shareholders'?\s+equity|comprehensive\s+income)"
     r"|consolidated\s+balance\s+sheets?"
 )
+#: How a filing states that revenue depends on a few customers or on one buyer. A question about
+#: who the customers are is answered by this disclosure, which never repeats the word "customer",
+#: so the wording itself is the bridge from the question to the page.
+_CONCENTRATION_DISCLOSURE = re.compile(
+    r"(?:significant|substantial|large|limited|material|major|vast)\s+"
+    r"(?:portion|number|amount|percentage|part)\s+of\s+(?:our|its|the|total|consolidated)?\s*"
+    r"(?:revenues?|sales|business|operating\s+revenues?)"
+    r"|\d{1,3}(?:\.\d+)?\s*%\s+of\s+(?:our|its|the)?\s*(?:total\s+)?(?:revenues?|sales)"
+    r"|concentration\s+(?:of\s+)?(?:credit\s+)?risk|customer\s+concentration"
+)
+#: Question terms that make the concentration disclosure the right page to prefer.
+_CONCENTRATION_TOPICS = frozenset({
+    "customer",
+    "customers",
+    "supplier",
+    "suppliers",
+    "reliance",
+    "depend",
+    "dependence",
+    "dependent",
+    "concentration",
+    "derive",
+    "derived",
+})
 _FISCAL_YEAR_TERM = re.compile(r"fy(\d{4})")
 _YEAR_TOKEN = re.compile(r"\b(?:19|20)\d{2}\b")
 _CAPTION_WINDOW = 400
 _MIN_TABLE_YEARS = 6
 _CAPTION_BOOST = 8.0
 _TABLE_BOOST = 2.0
+_CONCENTRATION_BOOST = 2.0
 _BM25_K1 = 1.2
 _BM25_B = 0.75
 _EXPANSION_WEIGHT = 1.0
@@ -356,14 +386,23 @@ _TOPIC_EXPANSIONS: tuple[tuple[tuple[str, ...], tuple[str, ...]], ...] = (
 class _IndexedPage:
     """One stored page prepared for lexical scoring."""
 
-    __slots__ = ("citation", "counts", "length", "caption", "table")
+    __slots__ = ("caption", "citation", "concentration", "counts", "length", "table")
 
-    def __init__(self, citation: Any, counts: dict[str, int], length: int, caption: bool, table: bool) -> None:
+    def __init__(
+        self,
+        citation: Any,
+        counts: dict[str, int],
+        length: int,
+        caption: bool,
+        table: bool,
+        concentration: bool,
+    ) -> None:
         self.citation = citation
         self.counts = counts
         self.length = length
         self.caption = caption
         self.table = table
+        self.concentration = concentration
 
 
 class _CorpusIndex:
@@ -386,7 +425,7 @@ class _CorpusIndex:
     def build(cls, records: Any) -> _CorpusIndex:
         """Index the stored pages, scoring the year columns against the document's own years."""
 
-        prepared: list[tuple[Any, dict[str, int], int, bool, list[str]]] = []
+        prepared: list[tuple[Any, dict[str, int], int, bool, list[str], bool]] = []
         year_totals: dict[str, int] = {}
         for record in records:
             _header, _, body = record.entry.text.partition("\n")
@@ -397,10 +436,11 @@ class _CorpusIndex:
                 length += 1
             lowered = " ".join(body.lower().split())
             caption = _STATEMENT_CAPTION.search(lowered[:_CAPTION_WINDOW]) is not None
+            concentration = _CONCENTRATION_DISCLOSURE.search(lowered) is not None
             years = _YEAR_TOKEN.findall(body)
             for year in years:
                 year_totals[year] = year_totals.get(year, 0) + 1
-            prepared.append((record.citation, counts, length, caption, years))
+            prepared.append((record.citation, counts, length, caption, years, concentration))
         dominant = {year for year, _count in sorted(year_totals.items(), key=lambda item: -item[1])[:2]}
         pages = tuple(
             _IndexedPage(
@@ -409,8 +449,9 @@ class _CorpusIndex:
                 length,
                 caption,
                 sum(1 for year in years if year in dominant) >= _MIN_TABLE_YEARS,
+                concentration,
             )
-            for citation, counts, length, caption, years in prepared
+            for citation, counts, length, caption, years, concentration in prepared
         )
         return cls(pages)
 
@@ -425,6 +466,7 @@ class _CorpusIndex:
             for term, _weight in weighted
         }
         weight_of = dict(weighted)
+        asks_about_dependence = bool(weight_of.keys() & _CONCENTRATION_TOPICS)
         average = self.average_length or 1.0
         scored: list[tuple[float, int]] = []
         for position, page in enumerate(self.pages):
@@ -442,6 +484,8 @@ class _CorpusIndex:
                     * (_BM25_K1 + 1.0)
                     / (frequency + normalisation)
                 )
+            if asks_about_dependence and page.concentration:
+                value *= _CONCENTRATION_BOOST
             if page.caption:
                 value += _CAPTION_BOOST
             if page.table:
