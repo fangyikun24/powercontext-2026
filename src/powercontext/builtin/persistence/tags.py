@@ -81,10 +81,16 @@ def tag_predicate(
     return count == len(tag_filter.keys) if tag_filter.match == "all" else count > 0
 
 
-def memory_tag_sql(alias: Literal["f", "m"]) -> str:
-    """A parameterized predicate for native FTS/vector SQL (aliases are internal)."""
+def memory_tag_sql(alias: Literal["f", "m"], *, suffix: str = "") -> str:
+    """A parameterized predicate for native FTS/vector SQL (aliases are internal).
 
-    return """
+    ``suffix`` namespaces the three bind parameters. A statement that filters two
+    independent query blocks - one per retrieval channel - needs distinct parameters in
+    each block, otherwise the shared ``IN`` lists would have to expand twice under one
+    name.
+    """
+
+    clause = """
       AND (SELECT COUNT(*) FROM pc_artifact_tags AS tags
            WHERE tags.scope_id = m.scope_id
              AND tags.family = 'memory'
@@ -94,15 +100,18 @@ def memory_tag_sql(alias: Literal["f", "m"]) -> str:
              AND tags.tag_key_hash IN :tag_hashes
              AND tags.tag_key IN :tag_keys) >= :tag_minimum
     """.replace("m.", alias + ".")
+    return clause if not suffix else clause.replace(":tag_", f":tag_{suffix}_")
 
 
-def memory_tag_parameters(tag_filter: TagFilter | None) -> dict[str, Any]:
+def memory_tag_parameters(tag_filter: TagFilter | None, *, suffix: str = "") -> dict[str, Any]:
     if tag_filter is None:
         return {}
     return {
-        "tag_keys": tag_filter.keys,
-        "tag_hashes": _key_hashes(tag_filter),
-        "tag_minimum": len(tag_filter.keys) if tag_filter.match == "all" else 1,
+        f"tag_{suffix}_keys" if suffix else "tag_keys": tag_filter.keys,
+        f"tag_{suffix}_hashes" if suffix else "tag_hashes": _key_hashes(tag_filter),
+        f"tag_{suffix}_minimum" if suffix else "tag_minimum": (
+            len(tag_filter.keys) if tag_filter.match == "all" else 1
+        ),
     }
 
 
