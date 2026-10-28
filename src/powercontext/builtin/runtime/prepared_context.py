@@ -28,6 +28,7 @@ from powercontext.builtin.artifacts.memory.models import MemoryCitation, MemoryH
 from powercontext.builtin.artifacts.profile.models import Profile
 from powercontext.builtin.artifacts.topic_memory import TopicMemory, TopicMemorySearchHit
 from powercontext.builtin.runtime.errors import PreparedContextInvariantError
+from powercontext.builtin.runtime.evidence_selection import Span, rank_spans, sentence_bounds
 from powercontext.builtin.runtime.models import PrepareContextRequest, PreparedContext
 from powercontext.builtin.runtime.prepared_code import (
     CodeEvidenceRef,
@@ -43,6 +44,8 @@ from powercontext.builtin.runtime.prepared_text import (
 from powercontext.builtin.runtime.recall_sufficiency import RecallBudgetView
 
 _MIN_TRUNCATED_CONTENT_BYTES = 64
+#: A delivered evidence span shorter than this would cost a full citation and carry nothing.
+_MIN_FRAGMENT_CHARS = 24
 _ELLIPSIS = "…"
 _BEGIN_MARKER = "BEGIN_POWERCONTEXT_PREPARED_CONTEXT_V1"
 _END_MARKER = "END_POWERCONTEXT_PREPARED_CONTEXT_V1"
@@ -100,12 +103,16 @@ class PreparedContextBuild:
     **not** a field here: ``ScopedContextApplication._prepare`` returns ``build.context`` and
     discards the rest, so such a field would have no production observer. The trace is
     delivered through the Runtime's optional ``RecallEffortSink`` instead.
+
+    ``fragments`` is filled only when the request asked for evidence selection; it is empty on
+    the ordinary path, which still delivers whole entries.
     """
 
     context: PreparedContext
     origins: tuple[PreparedContextOrigin, ...]
     omissions: PreparedContextOmissions = PreparedContextOmissions()
     code_origins: tuple[CodeEvidenceRef, ...] = ()
+    fragments: tuple[PreparedContextFragment, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -115,6 +122,21 @@ class MemoryEntryAddress:
     memory: ArtifactAddress
     entry_id: str
     entry_version_id: str
+
+
+@dataclass(frozen=True)
+class PreparedContextFragment:
+    """One literal span of one recalled Memory entry.
+
+    ``start`` and ``end`` are half-open character offsets into the entry text as the Memory
+    holds it, so ``text == entry.text[start:end]`` always holds and a reader can recheck the
+    span against the original. Nothing here is rewritten, translated, or generated.
+    """
+
+    address: MemoryEntryAddress
+    start: int
+    end: int
+    text: str
 
 
 PreparedContextOrigin = MemoryCitation | ArtifactRef | MemoryEntryAddress | ArtifactAddress
@@ -211,6 +233,11 @@ class PreparedContextBuilder:
         profile_candidates: Sequence[PreparedProfileCandidate] = (),
         code_candidates: Sequence[PreparedCodeCandidate] = (),
     ) -> PreparedContextBuild:
+        if request.evidence_selection:
+            if sum(len(candidates.hits) for candidates in memory_candidates) > self.memory_candidate_limit:
+                raise PreparedContextInvariantError("memory-candidate-limit")
+            return self._select_fragments(request=request, memory_candidates=memory_candidates)
+
         if request.include_code:
 
             def historical(history_request: PrepareContextRequest, entries: int) -> PreparedContextBuild:
@@ -255,6 +282,137 @@ class PreparedContextBuilder:
             origins=origins,
             omissions=omissions,
         )
+
+    def _select_fragments(
+        self,
+        *,
+        request: PrepareContextRequest,
+        memory_candidates: Sequence[PreparedMemoryCandidates],
+    ) -> PreparedContextBuild:
+        """Deliver the spans of the recalled entries that the query actually asks about.
+
+        Only Memory candidates take part: the selection mode exists to spend a byte budget on
+        the part of a recalled entry that answers the question, and Code, Topic Memory and
+        Experience carry no entry text to cut. Every delivered span is a character range of an
+        entry the Memory really holds, addressed by the same revision identity the caller used
+        to recall it.
+        """
+
+        candidates: list[tuple[str, MemoryHit]] = []
+        seen: set[tuple[str, str, str]] = set()
+        for group in memory_candidates:
+            if group.hits and group.memory_ref is None:
+                raise PreparedContextInvariantError("memory-ref-missing")
+            for hit in group.hits:
+                if hit.memory_ref != group.memory_ref:
+                    raise PreparedContextInvariantError("memory-ref-mismatch")
+                identity = (group.scope_id, hit.entry_id, hit.entry_version_id)
+                if identity in seen:
+                    continue
+                seen.add(identity)
+                if not hit.entry_id.strip() or not hit.entry_version_id.strip() or not hit.text.strip():
+                    continue
+                candidates.append((group.scope_id, hit))
+        if not candidates:
+            return PreparedContextBuild(context=self.empty(), origins=())
+
+        spans = rank_spans([hit.text for _scope_id, hit in candidates], request.query)
+        if not spans:
+            return PreparedContextBuild(context=self.empty(), origins=())
+        fragments = self._fit_fragments(request.max_bytes, spans, candidates)
+        if not fragments:
+            return PreparedContextBuild(
+                context=self.empty(),
+                origins=(),
+                omissions=PreparedContextOmissions(dropped_items=len(spans)),
+            )
+        content = _render_fragments(fragments)
+        content_bytes = len(content.encode("utf-8"))
+        if content_bytes > request.max_bytes:
+            raise PreparedContextInvariantError("output-budget")
+        return PreparedContextBuild(
+            context=PreparedContext(status="ready", content=content, content_bytes=content_bytes),
+            origins=tuple(fragment.address for fragment in fragments),
+            omissions=PreparedContextOmissions(dropped_items=len(spans) - len(fragments)),
+            fragments=fragments,
+        )
+
+    def _fit_fragments(
+        self,
+        max_bytes: int,
+        spans: Sequence[Span],
+        candidates: Sequence[tuple[str, MemoryHit]],
+    ) -> tuple[PreparedContextFragment, ...]:
+        """Choose spans that fit the whole rendered output, then spend what is left widening.
+
+        A span is delivered whole or not at all once anything has been delivered: a half span
+        costs the same citation bytes while carrying less evidence. The one exception is the
+        first span, which is trimmed to whatever still fits so that a tight budget delivers
+        something rather than nothing.
+
+        Widening matters because an annotation often runs past the sentence that matched the
+        question into the next one, which shares the finding. Growing a delivered span into its
+        neighbour therefore buys evidence the sentence score alone would not reach, and it uses
+        budget that would otherwise be returned unused.
+        """
+
+        placements: list[tuple[Span, PreparedContextFragment]] = []
+        bounds: dict[int, tuple[tuple[int, int], ...]] = {}
+
+        def sentences_of(entry_index: int) -> tuple[tuple[int, int], ...]:
+            cached = bounds.get(entry_index)
+            if cached is None:
+                cached = sentence_bounds(candidates[entry_index][1].text)
+                bounds[entry_index] = cached
+            return cached
+
+        def render(items: Sequence[tuple[Span, PreparedContextFragment]]) -> int:
+            return len(_render_fragments([fragment for _span, fragment in items]).encode("utf-8"))
+
+        for span in _first_span_per_entry(spans):
+            if len(placements) >= self.entry_limit:
+                break
+            scope_id, hit = candidates[span.entry_index]
+            fragment = _fragment(scope_id, hit, span.start, span.end)
+            if render([*placements, (span, fragment)]) <= max_bytes:
+                placements.append((span, fragment))
+                continue
+            if placements:
+                continue
+            trimmed = _shrink_fragment(max_bytes, scope_id, hit, span.start, span.end)
+            if trimmed is not None:
+                placements.append((span, trimmed))
+
+        if not placements:
+            return ()
+        grown = True
+        while grown:
+            grown = False
+            for index in range(len(placements)):
+                span, fragment = placements[index]
+                scope_id, hit = candidates[span.entry_index]
+                edges = sentences_of(span.entry_index)
+                attempts: list[tuple[int, int]] = []
+                if span.last + 1 < len(edges):
+                    attempts.append((span.first, span.last + 1))
+                if span.first > 0:
+                    attempts.append((span.first - 1, span.last))
+                for first, last in attempts:
+                    start = min(fragment.start, edges[first][0])
+                    end = max(fragment.end, edges[last][1])
+                    if start >= end:
+                        continue
+                    trial = _fragment(scope_id, hit, start, end)
+                    trial_placements = list(placements)
+                    trial_placements[index] = (
+                        Span(span.entry_index, start, end, span.score, first, last),
+                        trial,
+                    )
+                    if render(trial_placements) <= max_bytes:
+                        placements = trial_placements
+                        grown = True
+                        break
+        return tuple(fragment for _span, fragment in placements)
 
     def probe_budget(
         self,
@@ -685,10 +843,99 @@ def _interleave_groups(groups: Sequence[Sequence[_Item]]) -> tuple[_Item, ...]:
     return tuple(ordered)
 
 
+def _first_span_per_entry(spans: Sequence[Span]) -> tuple[Span, ...]:
+    """Order spans so every entry is represented once before any entry is represented twice.
+
+    Which recalled entry holds the evidence is a judgement from wording alone, and the wrong
+    entry cannot be recovered from further spans of it. Giving each entry one place in the
+    output therefore buys a second and third chance at the right entry, whereas spending the
+    whole budget on the front-runner's second span buys nothing if the front-runner is wrong.
+    ``spans`` is already ranked, so this keeps the best span of each entry and orders the
+    entries by that best score.
+    """
+
+    seen: set[int] = set()
+    ordered: list[Span] = []
+    for span in spans:
+        if span.entry_index in seen:
+            continue
+        seen.add(span.entry_index)
+        ordered.append(span)
+    return tuple(ordered)
+
+
 def _render(entries: Sequence[_PreparedContextEntry]) -> str:
     envelope = {
         "trust": "untrusted_history",
         "items": [_render_entry(entry) for entry in entries],
+    }
+    encoded = json.dumps(envelope, ensure_ascii=False, separators=(",", ":"))
+    return "\n\n".join((TRUST_POLICY, f"{_BEGIN_MARKER}\n{encoded}\n{_END_MARKER}"))
+
+
+def _fragment(scope_id: str, hit: MemoryHit, start: int, end: int) -> PreparedContextFragment:
+    """Address one exact span of one recalled entry."""
+
+    return PreparedContextFragment(
+        address=MemoryEntryAddress(
+            memory=ArtifactAddress(scope_id=scope_id, artifact=hit.memory_ref),
+            entry_id=hit.entry_id,
+            entry_version_id=hit.entry_version_id,
+        ),
+        start=start,
+        end=end,
+        text=hit.text[start:end],
+    )
+
+
+def _shrink_fragment(
+    max_bytes: int,
+    scope_id: str,
+    hit: MemoryHit,
+    start: int,
+    end: int,
+) -> PreparedContextFragment | None:
+    """Trim one span from its end until the whole rendering fits, or give up.
+
+    The search is over the character boundary rather than the byte budget because the fragment
+    has to stay a literal slice of the entry; widening it by one character is the only move
+    available. JSON escaping keeps rendered bytes monotone in characters for any one entry, so
+    a bisection finds the longest slice that fits.
+    """
+
+    low = start + _MIN_FRAGMENT_CHARS
+    high = end - 1
+    best: PreparedContextFragment | None = None
+    while low <= high:
+        middle = (low + high) // 2
+        trial = _fragment(scope_id, hit, start, middle)
+        if len(_render_fragments((trial,)).encode("utf-8")) <= max_bytes:
+            best = trial
+            low = middle + 1
+        else:
+            high = middle - 1
+    return best
+
+
+def _render_fragments(fragments: Sequence[PreparedContextFragment]) -> str:
+    """Render selected spans in the prepared-context envelope the caller already parses."""
+
+    envelope = {
+        "trust": "untrusted_history",
+        "items": [
+            {
+                "citation": {
+                    "scope_id": fragment.address.memory.scope_id,
+                    "memory_ref": fragment.address.memory.artifact.model_dump(mode="json"),
+                    "entry_id": fragment.address.entry_id,
+                    "entry_version_id": fragment.address.entry_version_id,
+                },
+                "content": fragment.text,
+                "start": fragment.start,
+                "end": fragment.end,
+            }
+            for fragment in fragments
+        ],
     }
     encoded = json.dumps(envelope, ensure_ascii=False, separators=(",", ":"))
     return "\n\n".join((TRUST_POLICY, f"{_BEGIN_MARKER}\n{encoded}\n{_END_MARKER}"))
