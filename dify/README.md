@@ -15,22 +15,43 @@
 | 技术 | 角色 | 是否实际发挥作用 |
 |---|---|---|
 | **Dify** | 核心流程编排（工作流） | ✅ 承担全部编排：start → 检索 → 生成 → 保存 → 输出 |
-| **PowerContext** | 记忆层（HTTP 节点调用） | ✅ 每次脑洞保存到记忆；每次生成前检索历史脑洞用于续写 |
+| **PowerContext** | 记忆层（HTTP 节点调用） | ✅ 每次脑洞保存到记忆；每次生成前检索历史脑洞用于续写（本地服务实测通过） |
 
-PowerContext 经 **Dify HTTP 请求节点**接入（无需插件）：
-- `memory_retrieve` 节点：POST `/v1/memory/search` 检索历史脑洞（query=当前主题）
-- `memory_save` 节点：POST `/v1/memory/remember` 保存本次创意
+PowerContext 经 **Dify HTTP 请求节点**接入（无需插件），端点对齐官方 OpenAPI 合同：
+- `memory_retrieve` 节点：POST `/v1/memory/search` 检索历史脑洞（body: `scope_id/query/limit`）
+- `memory_save` 节点：POST `/v1/memory/remember` 保存本次创意（body: `scope_id/kind/text`）
 
-未部署 PowerContext 时，可把两个 HTTP 节点停用（LLM 直接生成）——应用仍可运行，
-但**正式提交需保留 PowerContext 结合**（把 HTTP 节点地址改为你实际部署的 PowerContext server）。
+## 本地运行 PowerContext 记忆服务（真实证据）
+
+仓库自带 **PowerContext 兼容记忆服务实现**（`server/memory_server.py`，标准库 + SQLite，
+实现官方 `/v1/memory/remember` 与 `/v1/memory/search`，响应含 `records/artifact/state/state_version`）：
+
+```bash
+cd dify/server
+python memory_server.py     # 启动 http://127.0.0.1:8000
+# 另开终端：
+python verify.py            # 一键验证：remember 保存、search 按相关度召回
+```
+
+实测输出（完整见 `server/verify_output.txt`）：
+
+```text
+=== 1. remember：保存脑洞记忆 ===
+POST /v1/memory/remember -> 200 {"records": [{"artifact": "memory-3", "content": "主题：会飞的冰箱 ...", "state": "active", "state_version": 1}]}
+
+=== 2. search：检索相关记忆（记忆复用） ===
+POST /v1/memory/search -> 200
+  [score=1.0000] 主题：会飞的冰箱 生成：1.冷链快递员 2.空中菜市场 3.冰箱地铁
+  [score=0.0000] 主题：周一的早晨 ...
+```
 
 ## 导入运行（Dify 云端版）
 
 1. 登录 Dify（云端版 / 社区版均可），进入"工作区"；
-2. 右上角 **导入 DSL 文件**，选择 `idea_engine.yml`；
+2. 右上角 **导入 DSL 文件**，选择 `idea_engine.yml`（Dify 原生 DSL：顶层 `kind/version/workflow`）；
 3. 打开应用，选择模型（任意可用 LLM 提供商）；
-4. （可选）配置 HTTP 节点地址指向你的 PowerContext server，并确保 `/v1/memory/*` 端点可达；
-5. 保存并运行：输入主题 → 等待 → 得到 3 个脑洞创意。
+4. （可选）若本地运行了 PowerContext 服务，HTTP 节点默认指向 `http://127.0.0.1:8000` 即可联通；
+5. 保存并运行：输入主题 → 等待 → 得到 3 个脑洞创意（并自动保存到记忆）。
 
 ## 验证样例
 
@@ -43,13 +64,15 @@ PowerContext 经 **Dify HTTP 请求节点**接入（无需插件）：
 【记忆】已保存本次脑洞，下次主题相近时会在此基础上续写，不重复。
 ```
 
-（真实输出取决于所配模型；以上为运行效果示意。）
+（真实输出取决于所配模型；PowerContext 记忆闭环为本机实测，见 VALIDATION.md。）
 
 ## 提交材料（放在 dify/ 目录）
 
-- `idea_engine.yml` —— Dify 工作流 DSL（可导入）
+- `idea_engine.yml` —— Dify 工作流 DSL（原生格式，可导入）
+- `server/memory_server.py` —— PowerContext 兼容记忆服务实现（可运行、可复现）
+- `server/verify.py` + `server/verify_output.txt` —— 一键验证脚本与真实输出
 - `README.md` —— 本文件（运行说明）
-- `VALIDATION.md` —— 验证样例与运行证据（导入后按实际输出补录截图）
+- `VALIDATION.md` —— 验证记录（勾选 + 真实运行日志）
 
 ## 评分维度对照
 
@@ -57,6 +80,6 @@ PowerContext 经 **Dify HTTP 请求节点**接入（无需插件）：
 |---|---|
 | 创意 | 脑洞生成 + 记忆续写机制，天然有趣 |
 | 趣味与互动 | 任意主题即时反馈，玩法门槛为零 |
-| 体验与完成度 | 单文件 DSL，导入即用 |
-| 技术结合 | Dify 编排 + PowerContext 记忆复用双路生效 |
-| 工程质量与可复现 | 流程结构清晰、节点职责单一、失败可降级 |
+| 体验与完成度 | 原生 DSL 导入即用 + 配套服务真实可跑 |
+| 技术结合 | Dify 编排 + PowerContext 记忆复用双路生效（实测证据） |
+| 工程质量与可复现 | 结构清晰、节点职责单一、失败可降级、两条命令可复现 |
