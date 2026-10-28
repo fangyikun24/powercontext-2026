@@ -253,6 +253,7 @@ from powercontext.builtin.runtime.recall_sufficiency import (
     build_recall_candidates,
     recall_effort,
 )
+from powercontext.builtin.runtime.source_lifecycle import SourceLifecycleApplication
 from powercontext.builtin.runtime.statistics import RelationalScopedStatistics, overview_selection
 from powercontext.builtin.scope import ScopeApplication, ScopeDescriptor, ScopeSelection
 from powercontext.builtin.scope.subject_sources import SubjectSourceService
@@ -303,6 +304,7 @@ if TYPE_CHECKING:
     from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
     from powercontext.builtin.handoff_report.application import HandoffReportApplication
+    from powercontext.builtin.persistence.database import AsyncDatabase
     from powercontext.builtin.runtime.artifact_processing import ArtifactProcessingSupervisors
 
 
@@ -2700,6 +2702,19 @@ class ScopedTopicMemoryApplication:
                     query_embedding,
                     embedding_timeout_seconds,
                 )
+        lifecycle = self._runtime.lifecycle
+        if lifecycle is not None:
+            # A Topic whose evidence was withdrawn keeps its immutable Revision
+            # but must stop competing for recall until its sources come back.
+            unsupported = await lifecycle.unavailable_topics(self.scope_id)
+            if unsupported:
+                result = result.model_copy(
+                    update={
+                        "hits": tuple(
+                            hit for hit in result.hits if hit.artifact_ref.artifact_id not in unsupported
+                        )
+                    }
+                )
         observer = self._runtime._topic_memory_search_observer
         if observer is not None:
             try:
@@ -3060,6 +3075,7 @@ class BuiltinRuntime:
         remote_ingestion: RemoteIngestion | None = None,
         dream_service: DreamService | None = None,
         generation_concurrency: int = 4,
+        lifecycle_database: AsyncDatabase | None = None,
     ) -> None:
         if source_window_limit < 1:
             raise _RuntimeConfigurationError("source_window_limit")
@@ -3072,6 +3088,9 @@ class BuiltinRuntime:
         self._review_service = review_service
         self.profiles = profiles
         self.subject_sources = subject_sources
+        self.lifecycle = (
+            None if lifecycle_database is None else SourceLifecycleApplication(self, lifecycle_database)
+        )
         self._generation_service = generation_service
         self._dream_service = dream_service
         self._review_evidence_authorizer: ScopedEvidenceAuthorizer | None = None
