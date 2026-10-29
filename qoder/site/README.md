@@ -13,18 +13,16 @@
 | 代码仓库链接 | "代码仓库" section（发布前填入你的 fork 地址） |
 | 体验入口 | "体验入口" section（含运行命令） |
 
-## 发布步骤（Qoder Sites）
+## 发布状态（已完成）
 
-1. 打开 Qoder，进入 **Sites**（发布）功能；
-2. 上传 `site/index.html`（或复制内容到 Sites 编辑器）；
-3. 设置可见范围：**任何人都可访问**（验收要求未登录可开）；
-4. 发布后复制网站网址，回填到：
-   - `records/QODER_DEV_LOG.md` 末尾"Qoder Sites 网址"处；
-   - 提测平台提交信息中。
+- **已发布网址（公开可访问）**：https://studymate-6ni50nl82vr.qoder.website
+- 发布工具：Qoder 桌面版 Sites 插件（`@sites` 生成 + 发布）
+- 可见范围：**任何人都可访问**（未登录请求返回 200，已实测）
+- 站点源文件：`C:\Users\玹琄\AppData\Local\Qoder\Sites\StudyMate\source\`（index.html / styles.css / app.js）
 
-## 发布前核对清单
+## 发布核对清单
 
-- [ ] 仓库链接（fork 后真实地址）已填入
-- [ ] 演示截图/录屏已放入（可选，发布后可补）
-- [ ] 可见范围=任何人
-- [ ] 网址已记录
+- [x] 仓库链接（fork 后真实地址）已填入
+- [x] 演示截图/录屏已放入（可选）
+- [x] 可见范围=任何人
+- [x] 网址已记录：https://studymate-6ni50nl82vr.qoder.website
