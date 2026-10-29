@@ -95,7 +95,7 @@ cp .env.example .env                               # 填入 MINIMAX_API_KEY
 或直接：
 
 ```bash
-bash /scripts/setup.sh          # 建 venv、装依赖、生成 .env、doctor、ingest
+bash scripts/setup.sh          # 建 venv、装依赖、生成 .env、doctor、ingest
 ```
 
 Windows 上等价命令见 `scripts/verify.ps1`。
@@ -193,8 +193,8 @@ python -m sdd_context task list
 一键走完所有验收项：
 
 ```bash
-bash /scripts/verify.sh              # 不含模型调用
-bash /scripts/verify.sh --with-model # 含 MiniMax plan/apply/verify
+bash scripts/verify.sh              # 不含模型调用
+bash scripts/verify.sh --with-model # 含 MiniMax plan/apply/verify
 ```
 
 ---
@@ -225,7 +225,7 @@ bash /scripts/verify.sh --with-model # 含 MiniMax plan/apply/verify
 ## 7. 重置
 
 ```bash
-bash /scripts/reset.sh     # 或 Windows: ./scripts/reset.ps1
+bash scripts/reset.sh     # 或 Windows: ./scripts/reset.ps1
 ```
 
 删除 `state/`（seekdb 实例、PowerContext 库）、清空生成物，并把 `sample-project`
