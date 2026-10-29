@@ -16,7 +16,7 @@ PY="python"
 hr() { printf '\n================ %s ================\n' "$1"; }
 
 hr "0. clean state"
-./scripts/reset.sh
+bash scripts/reset.sh
 
 hr "1. configuration"
 $PY -m sdd_context doctor || true
