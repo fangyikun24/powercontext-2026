@@ -309,19 +309,12 @@ def open_materials_database(settings: Settings) -> Iterator[MaterialDatabase]:
     path = settings.materials_seekdb_path
     path.mkdir(parents=True, exist_ok=True)
     instance = _open_seekdb(pylibseekdb, path)
-    options = instance.connection_options()
-    connection = pymysql.connect(
-        host=options.get("host") or "127.0.0.1",
-        port=int(options["port"]),
-        user=options.get("user") or "root",
-        password=options.get("password") or "",
-        database="test",
-        charset="utf8mb4",
-        autocommit=False,
-        connect_timeout=20,
-        read_timeout=120,
-        write_timeout=120,
-    )
+    try:
+        connect_kwargs = _seekdb_connect_kwargs(instance)
+        connection = pymysql.connect(**connect_kwargs)
+    except Exception:
+        instance.close()
+        raise
     database = MaterialDatabase(connection, backend="seekdb")
     try:
         database.ensure_schema()
@@ -329,6 +322,37 @@ def open_materials_database(settings: Settings) -> Iterator[MaterialDatabase]:
     finally:
         database.close()
         instance.close()
+
+
+def _seekdb_connect_kwargs(instance: Any) -> dict[str, Any]:
+    """Translate ``connection_options()`` into ``pymysql.connect`` arguments.
+
+    The published wheels do not agree on how the embedded engine is reached: the
+    Windows build listens on a loopback TCP port, while the Linux build exposes a
+    unix socket inside a per-process temporary directory. Both shapes are accepted
+    here so the module runs on either platform.
+    """
+    options = instance.connection_options() or {}
+    kwargs: dict[str, Any] = {
+        "user": options.get("user") or "root",
+        "password": options.get("password") or "",
+        "database": "test",
+        "charset": "utf8mb4",
+        "autocommit": False,
+        "connect_timeout": 20,
+        "read_timeout": 120,
+        "write_timeout": 120,
+    }
+    if options.get("port"):
+        kwargs["host"] = options.get("host") or "127.0.0.1"
+        kwargs["port"] = int(options["port"])
+    elif options.get("unix_socket"):
+        kwargs["unix_socket"] = options["unix_socket"]
+    else:
+        raise RuntimeError(
+            "unrecognised seekdb connection options: " + ", ".join(sorted(options))
+        )
+    return kwargs
 
 
 def _open_seekdb(pylibseekdb: Any, path: Path, *, attempts: int = 3) -> Any:
