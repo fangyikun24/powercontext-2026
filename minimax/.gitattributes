@@ -1,0 +1,10 @@
+# The grading environment is Linux; keep every text file LF so shell scripts and
+# Python sources behave identically everywhere.
+* text=auto eol=lf
+*.sh text eol=lf
+*.py text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.txt text eol=lf
+*.toml text eol=lf
+*.patch text eol=lf
