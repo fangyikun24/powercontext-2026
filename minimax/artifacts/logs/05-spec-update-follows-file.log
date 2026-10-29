@@ -1,0 +1,5 @@
+﻿spec_id      : SPEC-ORD-004
+before       : {'hash': '78428e78df8c0ab797591c36bd1d957738f359b1d886598fd81162643dae3ad5', 'has_clause': False}
+after edit   : {'hash': 'c5540ad2b865cf1c27a0fc0c32b4c67b289bff41b6f28b35c2067c72904c7766', 'has_clause': True}
+after restore: {'hash': '78428e78df8c0ab797591c36bd1d957738f359b1d886598fd81162643dae3ad5', 'has_clause': False}
+RESULT: PASS — context content follows the specification file

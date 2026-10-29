@@ -1,0 +1,9 @@
+# SDD context module dependencies.
+#
+# `powercontext[seekdb]` provides the PowerContext runtime plus the embedded seekdb
+# backend. `pylibseekdb` is listed explicitly because the extra's environment marker
+# only pulls it on Linux/macOS; the wheel also exists for win_amd64 and we want the
+# module to be runnable (and verifiable) on Windows too.
+powercontext[seekdb]==1.4.1
+pylibseekdb>=1.4.0.post1
+pytest==9.2.0

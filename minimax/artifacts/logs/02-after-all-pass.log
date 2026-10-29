@@ -1,0 +1,10 @@
+﻿# AFTER the change (MiniMax-M3.1-Flash output): full suite passes
+# generated : 2026-10-29 17:25:29 +08:00
+# project   : sample-project (orderflow)
+# note      : source = snapshots/after, byte-identical to the code MiniMax returned
+# command   : python -m pytest -q
+
+..............................................                           [100%]
+46 passed in 0.06s
+
+# exit code : 0

@@ -1,0 +1,25 @@
+--- a/src/orderflow/service.py
++++ b/src/orderflow/service.py
+@@ -40,16 +40,22 @@
+         *,
+         status: OrderStatus | None = None,
+         customer_id: str | None = None,
++        min_total: Decimal | None = None,
+     ) -> list[Order]:
+         """Return orders matching the supplied filters, oldest first.
+ 
+         Every filter is optional; omitted filters do not restrict the result.
+         """
++        if min_total is not None and min_total < 0:
++            raise ValueError("min_total must not be negative")
++
+         result = list(self._orders.values())
+         if status is not None:
+             result = [order for order in result if order.status == status]
+         if customer_id is not None:
+             result = [order for order in result if order.customer_id == customer_id]
++        if min_total is not None:
++            result = [order for order in result if order.total >= min_total]
+         return sorted(result, key=lambda order: (order.created_at, order.order_id))
+ 
+     def place(self, order_id: str) -> Order:

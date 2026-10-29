@@ -1,0 +1,10 @@
+﻿# AFTER the change: regression tests only
+# generated : 2026-10-29 17:25:29 +08:00
+# project   : sample-project (orderflow)
+# note      : compatibility with existing behaviour must be preserved
+# command   : python -m pytest -q tests/test_orders.py tests/test_pricing.py tests/test_inventory.py tests/test_service.py
+
+......................................                                   [100%]
+38 passed in 0.05s
+
+# exit code : 0

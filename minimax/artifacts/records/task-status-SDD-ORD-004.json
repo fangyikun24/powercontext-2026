@@ -1,0 +1,85 @@
+﻿{
+  "powercontext_scope": "scp_1mm8c54btmpcdy5mrr1hcz1myh",
+  "task_id": "SDD-ORD-004",
+  "status": "verified",
+  "task": "SPEC-ORD-004: add an optional min_total filter to OrderService.list_orders so only orders whose total is at least min_total are returned; negative min_total must be rejected",
+  "specs": [
+    "SPEC-ORD-004",
+    "SPEC-ORD-005",
+    "SPEC-ORD-001",
+    "SPEC-ORD-002",
+    "SPEC-ORD-003",
+    "SPEC-PRC-004"
+  ],
+  "spec_sources": [
+    "specs/orders.md:33-43",
+    "specs/orders.md:45-69",
+    "specs/orders.md:12-17",
+    "specs/orders.md:19-24",
+    "specs/orders.md:26-31",
+    "specs/pricing.md:34-54"
+  ],
+  "code_targets": [
+    "src/orderflow/service.py:38-53",
+    "src/orderflow/models.py:57-85",
+    "src/orderflow/models.py:78-81",
+    "src/orderflow/service.py:26-30",
+    "src/orderflow/service.py:16-20",
+    "src/orderflow/service.py:13-79"
+  ],
+  "functional_tests": [
+    "tests/test_min_total_filter.py:73-75",
+    "tests/test_min_total_filter.py:54-56",
+    "tests/test_min_total_filter.py:43-45",
+    "tests/test_min_total_filter.py:63-65",
+    "tests/test_min_total_filter.py:68-70",
+    "tests/test_min_total_filter.py:59-60",
+    "tests/test_min_total_filter.py:48-51",
+    "tests/test_min_total_filter.py:78-83"
+  ],
+  "regression_tests": [
+    "tests/test_service.py:54-63",
+    "tests/test_service.py:47-51",
+    "tests/test_service.py:32-36",
+    "tests/test_service.py:17-21",
+    "tests/test_service.py:39-44",
+    "tests/test_service.py:24-29",
+    "tests/test_orders.py:41-43",
+    "tests/test_orders.py:46-48",
+    "tests/test_orders.py:77-79",
+    "tests/test_orders.py:65-67",
+    "tests/test_orders.py:82-84",
+    "tests/test_orders.py:60-62"
+  ],
+  "done": [
+    "select applicable specs, code and tests",
+    "ask MiniMax for the change",
+    "apply the change to the worktree",
+    "run the functional tests",
+    "run the regression tests"
+  ],
+  "todo": [],
+  "verification": [
+    {
+      "command": "D:\\Users\\21576\\Documents\\deepseek-harness\\default-workspace\\.venv\\Scripts\\python.exe -m pytest -q tests/test_min_total_filter.py",
+      "exit_code": 0,
+      "summary": "functional: 8 passed in 0.04s",
+      "log": "artifacts\\logs\\SDD-ORD-004-functional.log",
+      "recorded_at": "2026-10-29T09:31:22+00:00"
+    },
+    {
+      "command": "D:\\Users\\21576\\Documents\\deepseek-harness\\default-workspace\\.venv\\Scripts\\python.exe -m pytest -q tests/test_orders.py tests/test_pricing.py tests/test_inventory.py tests/test_service.py",
+      "exit_code": 0,
+      "summary": "regression: 38 passed in 0.06s",
+      "log": "artifacts\\logs\\SDD-ORD-004-regression.log",
+      "recorded_at": "2026-10-29T09:31:23+00:00"
+    }
+  ],
+  "plan_summary": "Added an optional keyword-only `min_total` filter to `OrderService.list_orders`. The service now rejects negative thresholds with `ValueError`, applies the inclusive `order.total >= min_total` condition alongside existing status and customer filters, and leaves existing ordering, order creation, and inventory workflows unchanged.",
+  "diff": "artifacts\\diffs\\SDD-ORD-004.patch",
+  "applied_files": [
+    "src/orderflow/service.py"
+  ],
+  "model": "MiniMax-M3.1-Flash",
+  "updated_at": "2026-10-29T09:31:23+00:00"
+}

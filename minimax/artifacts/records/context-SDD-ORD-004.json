@@ -1,0 +1,344 @@
+{
+  "task_id": "SDD-ORD-004",
+  "task": "SPEC-ORD-004: add an optional min_total filter to OrderService.list_orders so only orders whose total is at least min_total are returned; negative min_total must be rejected",
+  "project": "sample-project",
+  "database": "seekdb",
+  "queries": [
+    "SPEC-ORD-004: add an optional min_total filter to OrderService.list_orders so only orders whose total is at least min_total are returned; negative min_total must be rejected",
+    "SPEC-ORD-004",
+    "SPEC",
+    "min_total",
+    "OrderService",
+    "list_orders",
+    "**接口**: `OrderService.list_orders(min_total=None) -> list[Order]`"
+  ],
+  "specs": [
+    {
+      "kind": "spec",
+      "source": "specs/orders.md",
+      "locator": "specs/orders.md:33-43",
+      "title": "SPEC-ORD-004 订单列表金额下限筛选",
+      "content_hash": "78428e78df8c0ab797591c36bd1d957738f359b1d886598fd81162643dae3ad5",
+      "score": 1.0,
+      "reason": "named in the task",
+      "excerpt": "### SPEC-ORD-004 — 订单列表金额下限筛选\n\n- **状态**: accepted（本次任务新增）\n- **接口**: `OrderService.list_orders(min_total=None) -> list[Order]`\n- **要求**: 新增可选关键字参数 `min_total: Decimal | None`。\n- **要求**: `min_total` 为 `None` 时不过滤，行为与未传该参数完全一致。\n- **要求**: 给定时只返回 `order.total >= min_total` 的订单，**下界包含等号**。\n- **要求**: `order.total` 指订单 `models.Order.total` 属性（折扣前应付金额）。\n- **要求**: 与其他筛选条件按**逻辑与**组合。\n- **要求**: `min_total` 为负数时抛出 `ValueError`，不得静默当作无过滤。\n- **兼容性**: 该参数必须是**仅关键字**参数，且默认 `None`，保证既有调用方不受影响。"
+    },
+    {
+      "kind": "spec",
+      "source": "specs/orders.md",
+      "locator": "specs/orders.md:45-69",
+      "title": "SPEC-ORD-005 下单与取消的库存联动",
+      "content_hash": "a2c3412fec9d91f9715b986c45472f41efc1cb1b053824b628ffa5af1c429f1b",
+      "score": 7.3703,
+      "reason": "named in the task",
+      "excerpt": "### SPEC-ORD-005 — 下单与取消的库存联动\n\n- **状态**: accepted\n- **接口**: `OrderService.place(order_id)`、`OrderService.cancel(order_id)`\n- **要求**: `place` 仅允许从 `draft` 流转到 `placed`，并对每一行预留库存。\n- **要求**: 库存不足时抛出 `InsufficientStockError`，订单状态保持 `draft`（不得部分预留）。\n- **要求**: `cancel` 对 `placed` 订单释放已预留库存；对已取消订单抛 `InvalidTransitionError`。\n\n## 3. 必须保持的既有行为（回归约束）\n\n以下行为在本次修改中**不得改变**，任何实现必须继续满足：\n\n1. `list_orders()` 无参调用返回全部订单，且顺序稳定（SPEC-ORD-002）。\n2. `list_orders(status=...)` 与 `list_orders(customer_id=...)` 的既有筛选语义不变（SPEC-ORD-002/003）。\n3. 订单金额相关属性 `Order.subtotal` / `Order.total` 语义不变，仍为两位小数、四舍五入（见 pricing 规格）。\n4. 下单/取消的库存联动与异常类型不变（SPEC-ORD-005）。\n5. 既有调用方以位置参数或关键字参数调用 `add_order` / `get` / `place` / `cancel` 的方式不变。\n\n## 4. 验收映射\n\n| 需求 | 功能测试 | 回归测试 |\n| --- | --- | --- |\n| SPEC-ORD-004 | `tests/test_min_total_filter.py` | `tests/test_orders.py` |\n| SPEC-ORD-002/003 | `tests/test_orders.py` | — |\n| SPEC-ORD-005 | `tests/test_service.py` | — |"
+    },
+    {
+      "kind": "spec",
+      "source": "specs/orders.md",
+      "locator": "specs/orders.md:12-17",
+      "title": "SPEC-ORD-001 订单创建与唯一性",
+      "content_hash": "6c0aa6be1bb493d2d30ce7b0108a3118170202e2ba49d8b504b8663f87d6eca9",
+      "score": 6.2705,
+      "reason": "named in the task",
+      "excerpt": "### SPEC-ORD-001 — 订单创建与唯一性\n\n- **状态**: accepted\n- **接口**: `OrderService.add_order(order) -> Order`\n- **要求**: 相同 `order_id` 不得重复加入，重复时必须抛出 `ValueError`。\n- **要求**: `order_id` 与 `customer_id` 不允许为空白字符串。"
+    },
+    {
+      "kind": "spec",
+      "source": "specs/orders.md",
+      "locator": "specs/orders.md:19-24",
+      "title": "SPEC-ORD-002 按状态筛选",
+      "content_hash": "fe13ca5435d1f7aa0618d2bec6fce2b9bf40917cd97daeae37c7d48c4638a601",
+      "score": 4.9178,
+      "reason": "named in the task",
+      "excerpt": "### SPEC-ORD-002 — 按状态筛选\n\n- **状态**: accepted\n- **接口**: `OrderService.list_orders(status=None) -> list[Order]`\n- **要求**: `status` 为 `None` 时返回全部订单；否则只返回 `order.status == status` 的订单。\n- **要求**: 结果按 `(created_at, order_id)` 升序排列，保证输出稳定可回归。"
+    },
+    {
+      "kind": "spec",
+      "source": "specs/orders.md",
+      "locator": "specs/orders.md:26-31",
+      "title": "SPEC-ORD-003 按客户筛选",
+      "content_hash": "afd8e86d6b66113269f79d4e64c5242a822be5749b88104d1854d203770aacfb",
+      "score": 4.9178,
+      "reason": "named in the task",
+      "excerpt": "### SPEC-ORD-003 — 按客户筛选\n\n- **状态**: accepted\n- **接口**: `OrderService.list_orders(customer_id=None) -> list[Order]`\n- **要求**: `customer_id` 为 `None` 时不限制；否则只返回该客户的订单。\n- **要求**: 与 `status` 同时给出时按**逻辑与**组合。"
+    },
+    {
+      "kind": "spec",
+      "source": "specs/pricing.md",
+      "locator": "specs/pricing.md:34-54",
+      "title": "SPEC-PRC-004 折扣后应付金额",
+      "content_hash": "fb2e71bed8123d20d3aa1c23dbc523b372860ffc372e4f0d25b32f9813d8d054",
+      "score": 3.0869,
+      "reason": "named in the task",
+      "excerpt": "### SPEC-PRC-004 — 折扣后应付金额\n\n- **状态**: accepted\n- **接口**: `pricing.order_total(order, tier) -> Decimal`\n- **要求**: `order_total = subtotal * (1 - rate)`，两位小数、`ROUND_HALF_UP`。\n- **要求**: `rate == 0` 时直接返回 `subtotal`，不得因乘法引入精度抖动。\n- **要求**: 未知等级按 `standard` 处理，不得抛出异常。\n\n## 3. 必须保持的既有行为（回归约束）\n\n1. 金额量化的舍入方式为 `ROUND_HALF_UP`，不得改为银行家舍入（SPEC-PRC-001）。\n2. `Order.total == Order.subtotal`（SPEC-PRC-002）。\n3. 折扣率取最高命中门槛，不叠加（SPEC-PRC-003）。\n4. `rate == 0` 时返回原 `subtotal` 对象等值金额，不改变数值（SPEC-PRC-004）。\n\n## 4. 验收映射\n\n| 需求 | 功能测试 | 回归测试 |\n| --- | --- | --- |\n| SPEC-PRC-001/002 | `tests/test_pricing.py` | — |\n| SPEC-PRC-003/004 | `tests/test_pricing.py` | — |"
+    }
+  ],
+  "code_targets": [
+    {
+      "kind": "code",
+      "source": "src/orderflow/service.py",
+      "locator": "src/orderflow/service.py:38-59",
+      "title": "OrderService.list_orders",
+      "content_hash": "0163b6b036b58505fe093e9fad83dfa94f064a7770b9008be4fc4907f95d492d",
+      "score": 5.5589,
+      "reason": "called by the functional tests",
+      "excerpt": "Return orders matching the supplied filters, oldest first.\n\nEvery filter is optional; omitted filters do not restrict the result.\n\n    def list_orders(\n        self,\n        *,\n        status: OrderStatus | None = None,\n        customer_id: str | None = None,\n        min_total: Decimal | None = None,\n    ) -> list[Order]:\n        \"\"\"Return orders matching the supplied filters, oldest first.\n\n        Every filter is optional; omitted filters do not restrict the result.\n        \"\"\"\n        if min_total is not None and min_total < 0:\n            raise ValueError(\"min_total must not be negative\")\n\n        result = list(self._orders.values())\n        if status is not None:\n            result = [order for order in result if order.status == status]\n        if customer_id is not None:\n            result = [order for order in result if order.customer_id == customer_id]\n        if min_total is not None:\n            result = [order for order in result if order.total >= min_total]\n        return sorted(result, key=lambda order: (order.created_at, order.order_id))"
+    },
+    {
+      "kind": "code",
+      "source": "src/orderflow/service.py",
+      "locator": "src/orderflow/service.py:13-85",
+      "title": "OrderService",
+      "content_hash": "b85d87f244517c740179f38135f6d8075d74cd0af627985f0beae25e2d8c9b56",
+      "score": 3.6165,
+      "reason": "lexically closest code symbol",
+      "excerpt": "In-memory order repository plus the operations the API exposes.\n\nclass OrderService:\n    \"\"\"In-memory order repository plus the operations the API exposes.\"\"\"\n\n    def __init__(self, orders: Iterable[Order] = (), ledger: StockLedger | None = None) -> None:\n        self._orders: dict[str, Order] = {}\n        self._ledger = ledger if ledger is not None else StockLedger()\n        for order in orders:\n            self.add_order(order)\n\n    @property\n    def ledger(self) -> StockLedger:\n        return self._ledger\n\n    def add_order(self, order: Order) -> Order:\n        if order.order_id in self._orders:\n            raise ValueError(f\"duplicate order id: {order.order_id}\")\n        self._orders[order.order_id] = order\n        return order\n\n    def get(self, order_id: str) -> Order:\n        try:\n            return self._orders[order_id]\n        except KeyError as error:\n            raise OrderNotFoundError(order_id) from error\n\n    def list_orders(\n        self,\n        *,\n        status: OrderStatus | None = None,\n        customer_id: str | None = None,\n        min_total: Decimal | None = None,\n    ) -> list[Order]:\n        \"\"\"Return orders matching the supplied filters, oldest first.\n\n \n... (truncated)"
+    },
+    {
+      "kind": "code",
+      "source": "src/orderflow/models.py",
+      "locator": "src/orderflow/models.py:78-81",
+      "title": "Order.total",
+      "content_hash": "f1cecf23029d3e27bbef30c2f1efe74aa871effb74f229c48631d840b8ece933",
+      "score": 0.6036,
+      "reason": "called by the functional tests",
+      "excerpt": "Payable amount for this order, before customer-tier discount.\n\n    @property\n    def total(self) -> Decimal:\n        \"\"\"Payable amount for this order, before customer-tier discount.\"\"\"\n        return self.subtotal"
+    },
+    {
+      "kind": "code",
+      "source": "src/orderflow/service.py",
+      "locator": "src/orderflow/service.py:26-30",
+      "title": "OrderService.add_order",
+      "content_hash": "910c433017c2a778a0d0a30d99f191a98057928bfbc14724fefae006276f0d72",
+      "score": 3.0718,
+      "reason": "lexically closest code symbol",
+      "excerpt": "def add_order(self, order: Order) -> Order:\n        if order.order_id in self._orders:\n            raise ValueError(f\"duplicate order id: {order.order_id}\")\n        self._orders[order.order_id] = order\n        return order"
+    },
+    {
+      "kind": "code",
+      "source": "src/orderflow/service.py",
+      "locator": "src/orderflow/service.py:16-20",
+      "title": "OrderService.__init__",
+      "content_hash": "a8dae9604263c4d12a94c228a7a02290de80bb42861a36544fbb058efacb75b9",
+      "score": 2.7788,
+      "reason": "lexically closest code symbol",
+      "excerpt": "def __init__(self, orders: Iterable[Order] = (), ledger: StockLedger | None = None) -> None:\n        self._orders: dict[str, Order] = {}\n        self._ledger = ledger if ledger is not None else StockLedger()\n        for order in orders:\n            self.add_order(order)"
+    },
+    {
+      "kind": "code",
+      "source": "src/orderflow/inventory.py",
+      "locator": "src/orderflow/inventory.py:11-51",
+      "title": "StockLedger",
+      "content_hash": "ad79e8248234475ef76718c0cc99972688224971eab64dd3e3c5f57238d9e081",
+      "score": 1.9013,
+      "reason": "lexically closest code symbol",
+      "excerpt": "Tracks on-hand and reserved quantity per SKU.\n\n@dataclass\nclass StockLedger:\n    \"\"\"Tracks on-hand and reserved quantity per SKU.\"\"\"\n\n    on_hand: dict[str, int] = field(default_factory=dict)\n    reserved: dict[str, int] = field(default_factory=dict)\n\n    def __post_init__(self) -> None:\n        for sku, quantity in self.on_hand.items():\n            if quantity < 0:\n                raise ValueError(f\"on_hand for {sku} must not be negative\")\n        for sku, quantity in self.reserved.items():\n            if quantity < 0:\n                raise ValueError(f\"reserved for {sku} must not be negative\")\n\n    def available(self, sku: str) -> int:\n        return self.on_hand.get(sku, 0) - self.reserved.get(sku, 0)\n\n    def reserve(self, sku: str, quantity: int) -> None:\n        if quantity <= 0:\n            raise ValueError(f\"quantity must be positive, got {quantity}\")\n        available = self.available(sku)\n        if quantity > available:\n            raise InsufficientStockError(sku, quantity, available)\n        self.reserved[sku] = self.reserved.get(sku, 0) + quantity\n\n    def release(self, sku: str, quantity: int) -> None:\n        if quantity <= 0:\n            raise ValueError(f\"quantity\n... (truncated)"
+    }
+  ],
+  "functional_tests": [
+    {
+      "kind": "test",
+      "source": "tests/test_min_total_filter.py",
+      "locator": "tests/test_min_total_filter.py:73-75",
+      "title": "test_negative_min_total_is_rejected [covers SPEC-ORD-004]",
+      "content_hash": "da4eb229f9b78891e1e89ca23d7c497c0d2803c9a2d65a70c54346287ecdb294",
+      "score": 11.2515,
+      "reason": "declares coverage of a target spec",
+      "excerpt": "def test_negative_min_total_is_rejected(service):\n    with pytest.raises(ValueError):\n        service.list_orders(min_total=Decimal(\"-1.00\"))"
+    },
+    {
+      "kind": "test",
+      "source": "tests/test_min_total_filter.py",
+      "locator": "tests/test_min_total_filter.py:54-56",
+      "title": "test_min_total_none_returns_everything [covers SPEC-ORD-004]",
+      "content_hash": "d954d1745977ddfd3ecc12a2b08c86b54e8110185bb58df6a800962bdecea65d",
+      "score": 8.726,
+      "reason": "declares coverage of a target spec",
+      "excerpt": "def test_min_total_none_returns_everything(service):\n    orders = service.list_orders(min_total=None)\n    assert [order.order_id for order in orders] == [\"O-1\", \"O-2\", \"O-3\", \"O-4\"]"
+    },
+    {
+      "kind": "test",
+      "source": "tests/test_min_total_filter.py",
+      "locator": "tests/test_min_total_filter.py:43-45",
+      "title": "test_min_total_filters_out_smaller_orders [covers SPEC-ORD-004]",
+      "content_hash": "85cfd24227021c926ccdf3b509da743e6dfa6850f47508c12794e1bc1847de36",
+      "score": 8.2193,
+      "reason": "declares coverage of a target spec",
+      "excerpt": "def test_min_total_filters_out_smaller_orders(service):\n    orders = service.list_orders(min_total=Decimal(\"100.00\"))\n    assert [order.order_id for order in orders] == [\"O-2\", \"O-4\"]"
+    },
+    {
+      "kind": "test",
+      "source": "tests/test_min_total_filter.py",
+      "locator": "tests/test_min_total_filter.py:63-65",
+      "title": "test_min_total_combines_with_status_and_customer [covers SPEC-ORD-004]",
+      "content_hash": "59f02d839e318d4b56cf020abcc9c4833baefd6595a5710d6b7129a6205fa498",
+      "score": 8.2193,
+      "reason": "declares coverage of a target spec",
+      "excerpt": "def test_min_total_combines_with_status_and_customer(service):\n    orders = service.list_orders(status=OrderStatus.PLACED, customer_id=\"C-2\", min_total=Decimal(\"50.00\"))\n    assert [order.order_id for order in orders] == [\"O-3\"]"
+    },
+    {
+      "kind": "test",
+      "source": "tests/test_min_total_filter.py",
+      "locator": "tests/test_min_total_filter.py:68-70",
+      "title": "test_min_total_still_respects_customer_filter [covers SPEC-ORD-004]",
+      "content_hash": "1e33dfc8e8fe0192b4ab2d103e05b4e15ada0ec95bb6ec38ff5b8d4fb754df32",
+      "score": 8.2193,
+      "reason": "declares coverage of a target spec",
+      "excerpt": "def test_min_total_still_respects_customer_filter(service):\n    orders = service.list_orders(customer_id=\"C-1\", min_total=Decimal(\"100.00\"))\n    assert [order.order_id for order in orders] == [\"O-2\"]"
+    },
+    {
+      "kind": "test",
+      "source": "tests/test_min_total_filter.py",
+      "locator": "tests/test_min_total_filter.py:59-60",
+      "title": "test_min_total_above_everything_returns_empty [covers SPEC-ORD-004]",
+      "content_hash": "565f2cec9705d618c65c7fb3d6dc1f368cf88190772789aff93acf22a9adeeec",
+      "score": 8.0419,
+      "reason": "declares coverage of a target spec",
+      "excerpt": "def test_min_total_above_everything_returns_empty(service):\n    assert service.list_orders(min_total=Decimal(\"10000.00\")) == []"
+    },
+    {
+      "kind": "test",
+      "source": "tests/test_min_total_filter.py",
+      "locator": "tests/test_min_total_filter.py:48-51",
+      "title": "test_min_total_boundary_is_inclusive [covers SPEC-ORD-004]",
+      "content_hash": "1baa2dd490fa6dd0949786fa3269979c8be7c4fa498aaa9aea2ecf40243b1326",
+      "score": 7.7683,
+      "reason": "declares coverage of a target spec",
+      "excerpt": "def test_min_total_boundary_is_inclusive(service):\n    # O-3 totals exactly 90.00 and must be kept when the floor is 90.00.\n    orders = service.list_orders(min_total=Decimal(\"90.00\"))\n    assert [order.order_id for order in orders] == [\"O-2\", \"O-3\", \"O-4\"]"
+    },
+    {
+      "kind": "test",
+      "source": "tests/test_min_total_filter.py",
+      "locator": "tests/test_min_total_filter.py:78-83",
+      "title": "test_min_total_is_keyword_only_and_keeps_existing_calls_working [covers SPEC-ORD-004]",
+      "content_hash": "cbf73c430356a1dbd424fa7c215a9ec914f5f3b0ac72b314af7c329716e0ca3d",
+      "score": 7.2344,
+      "reason": "declares coverage of a target spec",
+      "excerpt": "def test_min_total_is_keyword_only_and_keeps_existing_calls_working(service):\n    # Existing positional/keyword usage must be unaffected by the new parameter.\n    assert [order.order_id for order in service.list_orders()] == [\"O-1\", \"O-2\", \"O-3\", \"O-4\"]\n    assert [order.order_id for order in service.list_orders(status=OrderStatus.PLACED)] == [\"O-2\", \"O-3\"]\n    with pytest.raises(TypeError):\n        service.list_orders(OrderStatus.PLACED)  # type: ignore[misc]"
+    }
+  ],
+  "regression_tests": [
+    {
+      "kind": "test",
+      "source": "tests/test_inventory.py",
+      "locator": "tests/test_inventory.py:44-46",
+      "title": "test_negative_on_hand_is_rejected",
+      "content_hash": "106c47ecf6518d036a086911d9a478a81d3d2498a86f7b74487e4e2182c8fbdc",
+      "score": 3.8866,
+      "reason": "test module for a module under change",
+      "excerpt": "def test_negative_on_hand_is_rejected():\n    with pytest.raises(ValueError):\n        StockLedger(on_hand={\"SKU-1\": -1})"
+    },
+    {
+      "kind": "test",
+      "source": "tests/test_service.py",
+      "locator": "tests/test_service.py:54-63",
+      "title": "test_total_revenue_counts_placed_and_paid_only",
+      "content_hash": "8543b0e785d28bbf115fdf09844178177b80e9f9a81f7bf03dd488f5c333c416",
+      "score": 2.9649,
+      "reason": "test module for a module under change",
+      "excerpt": "def test_total_revenue_counts_placed_and_paid_only():\n    service = OrderService(\n        [\n            build_order(\"O-1\", amount=\"10.00\"),\n            build_order(\"O-2\", amount=\"20.00\"),\n        ]\n    )\n    service.ledger.receive(\"SKU-1\", 10)\n    service.place(\"O-1\")\n    assert service.total_revenue() == Decimal(\"20.00\")"
+    },
+    {
+      "kind": "test",
+      "source": "tests/test_service.py",
+      "locator": "tests/test_service.py:47-51",
+      "title": "test_cancel_twice_is_rejected",
+      "content_hash": "e70f714dbaa839b916e9a06b9e09cca9c7f3b451f8d940db9614419f396f5be1",
+      "score": 2.6441,
+      "reason": "test module for a module under change",
+      "excerpt": "def test_cancel_twice_is_rejected():\n    service = OrderService([build_order()])\n    service.cancel(\"O-1\")\n    with pytest.raises(InvalidTransitionError):\n        service.cancel(\"O-1\")"
+    },
+    {
+      "kind": "test",
+      "source": "tests/test_service.py",
+      "locator": "tests/test_service.py:32-36",
+      "title": "test_place_twice_is_rejected",
+      "content_hash": "4e5fb7cba3b0b28a15af079ca6d713ab37d73e45b95e98d19efc9ad69403ad90",
+      "score": 2.3181,
+      "reason": "test module for a module under change",
+      "excerpt": "def test_place_twice_is_rejected():\n    service = OrderService([build_order()], ledger=StockLedger(on_hand={\"SKU-1\": 10}))\n    service.place(\"O-1\")\n    with pytest.raises(InvalidTransitionError):\n        service.place(\"O-1\")"
+    },
+    {
+      "kind": "test",
+      "source": "tests/test_inventory.py",
+      "locator": "tests/test_inventory.py:49-51",
+      "title": "test_snapshot_is_sorted_and_covers_all_skus",
+      "content_hash": "1e7479bc713a06f81f3b4dcde1d76a5873b780f82c153eee80934a7f4617dbd4",
+      "score": 0.7958,
+      "reason": "test module for a module under change",
+      "excerpt": "def test_snapshot_is_sorted_and_covers_all_skus():\n    ledger = StockLedger(on_hand={\"B\": 2, \"A\": 1}, reserved={\"C\": 0})\n    assert list(ledger.snapshot()) == [\"A\", \"B\", \"C\"]"
+    },
+    {
+      "kind": "test",
+      "source": "tests/test_service.py",
+      "locator": "tests/test_service.py:17-21",
+      "title": "test_place_reserves_stock",
+      "content_hash": "5df69a04b4f1a8dd50c29b0e3568a766b0a9d0c3e747bc69a976716c715a4a7b",
+      "score": 0.3887,
+      "reason": "test module for a module under change",
+      "excerpt": "def test_place_reserves_stock():\n    service = OrderService([build_order()], ledger=StockLedger(on_hand={\"SKU-1\": 5}))\n    service.place(\"O-1\")\n    assert service.get(\"O-1\").status is OrderStatus.PLACED\n    assert service.ledger.available(\"SKU-1\") == 3"
+    },
+    {
+      "kind": "test",
+      "source": "tests/test_service.py",
+      "locator": "tests/test_service.py:39-44",
+      "title": "test_cancel_releases_reserved_stock",
+      "content_hash": "35775bdf5ded5204f6032bde0e7748665f6cf0e29ccd26f7e8d8ffc6beb3ee2f",
+      "score": 0.3654,
+      "reason": "test module for a module under change",
+      "excerpt": "def test_cancel_releases_reserved_stock():\n    service = OrderService([build_order()], ledger=StockLedger(on_hand={\"SKU-1\": 5}))\n    service.place(\"O-1\")\n    service.cancel(\"O-1\")\n    assert service.get(\"O-1\").status is OrderStatus.CANCELLED\n    assert service.ledger.available(\"SKU-1\") == 5"
+    },
+    {
+      "kind": "test",
+      "source": "tests/test_service.py",
+      "locator": "tests/test_service.py:24-29",
+      "title": "test_place_without_stock_raises_and_leaves_order_draft",
+      "content_hash": "4382d7a943fb5467881318f58287dc46381b187a2a505e11d1d8398a7ec58992",
+      "score": 0.3354,
+      "reason": "test module for a module under change",
+      "excerpt": "def test_place_without_stock_raises_and_leaves_order_draft():\n    service = OrderService([build_order()], ledger=StockLedger(on_hand={\"SKU-1\": 1}))\n    with pytest.raises(InsufficientStockError):\n        service.place(\"O-1\")\n    assert service.get(\"O-1\").status is OrderStatus.DRAFT\n    assert service.ledger.available(\"SKU-1\") == 1"
+    },
+    {
+      "kind": "test",
+      "source": "tests/test_orders.py",
+      "locator": "tests/test_orders.py:41-43",
+      "title": "test_duplicate_order_id_is_rejected",
+      "content_hash": "ae680b9ee5d8c8ab661574dde6c06a0790d23c10e5f61647c437cd31d009d08b",
+      "score": 4.6345,
+      "reason": "exercises a symbol under change",
+      "excerpt": "def test_duplicate_order_id_is_rejected(service):\n    with pytest.raises(ValueError):\n        service.add_order(build_order(\"O-1\", \"C-9\", day=9, amount=\"1.00\", status=OrderStatus.DRAFT))"
+    },
+    {
+      "kind": "test",
+      "source": "tests/test_orders.py",
+      "locator": "tests/test_orders.py:77-79",
+      "title": "test_list_filters_by_customer",
+      "content_hash": "f4607d571d2305dddfadc02218f6aaf202919850393f587418cb1f0b33fef9bc",
+      "score": 2.1112,
+      "reason": "exercises a symbol under change",
+      "excerpt": "def test_list_filters_by_customer(service):\n    orders = service.list_orders(customer_id=\"C-2\")\n    assert [order.order_id for order in orders] == [\"O-3\", \"O-4\"]"
+    },
+    {
+      "kind": "test",
+      "source": "tests/test_orders.py",
+      "locator": "tests/test_orders.py:65-67",
+      "title": "test_list_filters_by_status",
+      "content_hash": "cdaa512f97de61724cd97d2382278d8e19169f10fceeb8e1f05343363db1837a",
+      "score": 2.0282,
+      "reason": "exercises a symbol under change",
+      "excerpt": "def test_list_filters_by_status(service):\n    orders = service.list_orders(status=OrderStatus.PLACED)\n    assert [order.order_id for order in orders] == [\"O-2\", \"O-3\"]"
+    },
+    {
+      "kind": "test",
+      "source": "tests/test_orders.py",
+      "locator": "tests/test_orders.py:82-84",
+      "title": "test_list_combines_status_and_customer",
+      "content_hash": "9450084bb0c241f5adc39268bd19ad577c7946df849ebd2ed84e6a70915cc226",
+      "score": 1.9515,
+      "reason": "exercises a symbol under change",
+      "excerpt": "def test_list_combines_status_and_customer(service):\n    orders = service.list_orders(status=OrderStatus.PLACED, customer_id=\"C-2\")\n    assert [order.order_id for order in orders] == [\"O-3\"]"
+    }
+  ],
+  "task_state": null
+}

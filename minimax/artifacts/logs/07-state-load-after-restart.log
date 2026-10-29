@@ -1,0 +1,6 @@
+﻿loaded task SDD-ORD-004 status=planned
+  specs=['SPEC-ORD-004'] sources=['specs/orders.md:33-43']
+  code=['src/orderflow/service.py:38-53']
+  done=['select context'] todo=['apply change']
+  saved_at=2026-10-29T08:51:16+00:00
+  listed=[{'task_id': 'SDD-ORD-004', 'status': 'planned', 'updated_at': '2026-10-29T08:51:16+00:00', 'specs': ['SPEC-ORD-004'], 'done': ['select context'], 'todo': ['apply change'], 'verification': []}]

@@ -1,0 +1,90 @@
+﻿# BEFORE the change: target tests fail, regressions pass
+# generated : 2026-10-29 17:25:29 +08:00
+# project   : sample-project (orderflow)
+# note      : source = snapshots/before (min_total is not implemented yet)
+# command   : python -m pytest -q
+
+........FFFFFFF...............................                           [100%]
+================================== FAILURES ===================================
+__________________ test_min_total_filters_out_smaller_orders __________________
+
+service = <orderflow.service.OrderService object at 0x00000240FE7BFE00>
+
+    def test_min_total_filters_out_smaller_orders(service):
+>       orders = service.list_orders(min_total=Decimal("100.00"))
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: OrderService.list_orders() got an unexpected keyword argument 'min_total'
+
+tests\test_min_total_filter.py:44: TypeError
+____________________ test_min_total_boundary_is_inclusive _____________________
+
+service = <orderflow.service.OrderService object at 0x00000240FE8C2150>
+
+    def test_min_total_boundary_is_inclusive(service):
+        # O-3 totals exactly 90.00 and must be kept when the floor is 90.00.
+>       orders = service.list_orders(min_total=Decimal("90.00"))
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: OrderService.list_orders() got an unexpected keyword argument 'min_total'
+
+tests\test_min_total_filter.py:50: TypeError
+___________________ test_min_total_none_returns_everything ____________________
+
+service = <orderflow.service.OrderService object at 0x00000240FE8C3CB0>
+
+    def test_min_total_none_returns_everything(service):
+>       orders = service.list_orders(min_total=None)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: OrderService.list_orders() got an unexpected keyword argument 'min_total'
+
+tests\test_min_total_filter.py:55: TypeError
+________________ test_min_total_above_everything_returns_empty ________________
+
+service = <orderflow.service.OrderService object at 0x00000240FE8C0BF0>
+
+    def test_min_total_above_everything_returns_empty(service):
+>       assert service.list_orders(min_total=Decimal("10000.00")) == []
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: OrderService.list_orders() got an unexpected keyword argument 'min_total'
+
+tests\test_min_total_filter.py:60: TypeError
+______________ test_min_total_combines_with_status_and_customer _______________
+
+service = <orderflow.service.OrderService object at 0x00000240FE8C19D0>
+
+    def test_min_total_combines_with_status_and_customer(service):
+>       orders = service.list_orders(status=OrderStatus.PLACED, customer_id="C-2", min_total=Decimal("50.00"))
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: OrderService.list_orders() got an unexpected keyword argument 'min_total'
+
+tests\test_min_total_filter.py:64: TypeError
+________________ test_min_total_still_respects_customer_filter ________________
+
+service = <orderflow.service.OrderService object at 0x00000240FE8C2A50>
+
+    def test_min_total_still_respects_customer_filter(service):
+>       orders = service.list_orders(customer_id="C-1", min_total=Decimal("100.00"))
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: OrderService.list_orders() got an unexpected keyword argument 'min_total'
+
+tests\test_min_total_filter.py:69: TypeError
+_____________________ test_negative_min_total_is_rejected _____________________
+
+service = <orderflow.service.OrderService object at 0x00000240FE8CDE50>
+
+    def test_negative_min_total_is_rejected(service):
+        with pytest.raises(ValueError):
+>           service.list_orders(min_total=Decimal("-1.00"))
+E           TypeError: OrderService.list_orders() got an unexpected keyword argument 'min_total'
+
+tests\test_min_total_filter.py:75: TypeError
+=========================== short test summary info ===========================
+FAILED tests/test_min_total_filter.py::test_min_total_filters_out_smaller_orders
+FAILED tests/test_min_total_filter.py::test_min_total_boundary_is_inclusive
+FAILED tests/test_min_total_filter.py::test_min_total_none_returns_everything
+FAILED tests/test_min_total_filter.py::test_min_total_above_everything_returns_empty
+FAILED tests/test_min_total_filter.py::test_min_total_combines_with_status_and_customer
+FAILED tests/test_min_total_filter.py::test_min_total_still_respects_customer_filter
+FAILED tests/test_min_total_filter.py::test_negative_min_total_is_rejected - ...
+7 failed, 39 passed in 0.26s
+
+# exit code : 1

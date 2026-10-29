@@ -1,0 +1,178 @@
+﻿{
+  "backend": "seekdb",
+  "project": "sample-project",
+  "table": "sdd_materials",
+  "table_ddl": "CREATE TABLE `sdd_materials` (\n  `material_id` char(40) COLLATE utf8mb4_bin NOT NULL,\n  `project` varchar(128) COLLATE utf8mb4_bin NOT NULL,\n  `kind` varchar(16) COLLATE utf8mb4_bin NOT NULL,\n  `path` varchar(512) COLLATE utf8mb4_bin NOT NULL,\n  `symbol` varchar(255) COLLATE utf8mb4_bin NOT NULL DEFAULT '',\n  `start_line` int(11) NOT NULL DEFAULT '0',\n  `end_line` int(11) NOT NULL DEFAULT '0',\n  `title` varchar(512) COLLATE utf8mb4_bin NOT NULL DEFAULT '',\n  `body` longtext COLLATE utf8mb4_bin NOT NULL,\n  `content_hash` char(64) COLLATE utf8mb4_bin NOT NULL,\n  `updated_at` bigint(20) NOT NULL,\n  `searchable_text` longtext COLLATE utf8mb4_bin NOT NULL,\n  PRIMARY KEY (`material_id`),\n  KEY `ix_sdd_project_kind` (`project`, `kind`) BLOCK_SIZE 16384 LOCAL,\n  KEY `ix_sdd_path` (`path`(191)) BLOCK_SIZE 16384 LOCAL,\n  FULLTEXT KEY `ix_sdd_fts` (`searchable_text`) WITH PARSER space PARSER_PROPERTIES=(min_token_size=3,max_token_size=84) BLOCK_SIZE 16384\n) ORGANIZATION INDEX DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_bin ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' BLOCK_SIZE = 16384 TABLET_SIZE = 134217728 PCTFREE = 0",
+  "indexes": [
+    [
+      "ix_sdd_fts",
+      "FULLTEXT",
+      "__word_segment_30_1793265458187985"
+    ],
+    [
+      "ix_sdd_fts",
+      "FULLTEXT",
+      "__doc_id_1793265457626201"
+    ],
+    [
+      "ix_sdd_path",
+      "BTREE",
+      "path"
+    ],
+    [
+      "ix_sdd_project_kind",
+      "BTREE",
+      "project"
+    ],
+    [
+      "ix_sdd_project_kind",
+      "BTREE",
+      "kind"
+    ],
+    [
+      "PRIMARY",
+      "BTREE",
+      "material_id"
+    ]
+  ],
+  "server": [
+    "5.7.25-OceanBase seekdb-v1.4.0.0",
+    "test"
+  ],
+  "counts": {
+    "code": 41,
+    "spec": 9,
+    "test": 41
+  },
+  "sample_rows": [
+    [
+      "code",
+      "src/orderflow/__init__.py",
+      "",
+      "fb77c54a922e177cba514ff6d0e0aa7a7063f3b377130f908129b4ccb231a2e5"
+    ],
+    [
+      "code",
+      "src/orderflow/errors.py",
+      "",
+      "30f5881826a13f8fa49307968a95289f626a340f7d67804a51d65e1360831af5"
+    ],
+    [
+      "code",
+      "src/orderflow/errors.py",
+      "orderflow.errors.OrderFlowError",
+      "ca9c167975fca98d5cdfe3d0a40c08181f55c1e785cca385c41303cc82f85f2d"
+    ],
+    [
+      "code",
+      "src/orderflow/errors.py",
+      "orderflow.errors.OrderNotFoundError",
+      "3cabb83784ffcc66664c8dc1842025fd7dc042cb8c9d92905be46a174ce1d8e8"
+    ],
+    [
+      "code",
+      "src/orderflow/errors.py",
+      "orderflow.errors.InsufficientStockError",
+      "90303e47f71d8337f0716f9dd3c05598bf3855f6b845a7fc3a41ec9ef64a1706"
+    ],
+    [
+      "code",
+      "src/orderflow/errors.py",
+      "orderflow.errors.InsufficientStockError.__init__",
+      "b12735490f3c35a6f7c8dc6fc4aae8257ca1fa88be894d931dbd3fd299f3a464"
+    ],
+    [
+      "code",
+      "src/orderflow/errors.py",
+      "orderflow.errors.InvalidTransitionError",
+      "04387dad4f0c9302c424985fa62692b408c3066414bf912281d7bfcaff3c990d"
+    ],
+    [
+      "code",
+      "src/orderflow/inventory.py",
+      "",
+      "e311499f4bc9d8bf76d26bc1683c6674be3655283c6e9d3939970dfd61e973f4"
+    ],
+    [
+      "code",
+      "src/orderflow/inventory.py",
+      "orderflow.inventory.StockLedger",
+      "ad79e8248234475ef76718c0cc99972688224971eab64dd3e3c5f57238d9e081"
+    ],
+    [
+      "code",
+      "src/orderflow/inventory.py",
+      "orderflow.inventory.StockLedger.__post_init__",
+      "b676a1a842f56b9eaf4213f646967c4147201b08f69007baae865ccd310fc173"
+    ]
+  ],
+  "query_terms": "spec ord 004 add optional min total filter order service list orders only whose least returned negative rejected",
+  "ranked_hits": [
+    {
+      "kind": "test",
+      "locator": "tests/test_min_total_filter.py:73-75",
+      "title": "test_negative_min_total_is_rejected [covers SPEC-ORD-004]",
+      "score": 11.2515,
+      "content_hash": "da4eb229f9b78891e1e89ca23d7c497c0d2803c9a2d65a70c54346287ecdb294"
+    },
+    {
+      "kind": "test",
+      "locator": "tests/test_min_total_filter.py:54-56",
+      "title": "test_min_total_none_returns_everything [covers SPEC-ORD-004]",
+      "score": 8.726,
+      "content_hash": "d954d1745977ddfd3ecc12a2b08c86b54e8110185bb58df6a800962bdecea65d"
+    },
+    {
+      "kind": "test",
+      "locator": "tests/test_min_total_filter.py:43-45",
+      "title": "test_min_total_filters_out_smaller_orders [covers SPEC-ORD-004]",
+      "score": 8.2193,
+      "content_hash": "85cfd24227021c926ccdf3b509da743e6dfa6850f47508c12794e1bc1847de36"
+    },
+    {
+      "kind": "test",
+      "locator": "tests/test_min_total_filter.py:63-65",
+      "title": "test_min_total_combines_with_status_and_customer [covers SPEC-ORD-004]",
+      "score": 8.2193,
+      "content_hash": "59f02d839e318d4b56cf020abcc9c4833baefd6595a5710d6b7129a6205fa498"
+    },
+    {
+      "kind": "test",
+      "locator": "tests/test_min_total_filter.py:68-70",
+      "title": "test_min_total_still_respects_customer_filter [covers SPEC-ORD-004]",
+      "score": 8.2193,
+      "content_hash": "1e33dfc8e8fe0192b4ab2d103e05b4e15ada0ec95bb6ec38ff5b8d4fb754df32"
+    },
+    {
+      "kind": "test",
+      "locator": "tests/test_min_total_filter.py:59-60",
+      "title": "test_min_total_above_everything_returns_empty [covers SPEC-ORD-004]",
+      "score": 8.0419,
+      "content_hash": "565f2cec9705d618c65c7fb3d6dc1f368cf88190772789aff93acf22a9adeeec"
+    },
+    {
+      "kind": "spec",
+      "locator": "specs/orders.md:33-43",
+      "title": "SPEC-ORD-004 订单列表金额下限筛选",
+      "score": 7.8138,
+      "content_hash": "78428e78df8c0ab797591c36bd1d957738f359b1d886598fd81162643dae3ad5"
+    },
+    {
+      "kind": "test",
+      "locator": "tests/test_min_total_filter.py:48-51",
+      "title": "test_min_total_boundary_is_inclusive [covers SPEC-ORD-004]",
+      "score": 7.7683,
+      "content_hash": "1baa2dd490fa6dd0949786fa3269979c8be7c4fa498aaa9aea2ecf40243b1326"
+    }
+  ],
+  "spec_ids_named": [
+    "SPEC-ORD-004"
+  ],
+  "pinned_spec": [
+    {
+      "locator": "specs/orders.md:33-43",
+      "content_hash": "78428e78df8c0ab797591c36bd1d957738f359b1d886598fd81162643dae3ad5",
+      "bytes": 480
+    }
+  ]
+}

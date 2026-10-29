@@ -1,0 +1,17 @@
+[project]
+name = "orderflow"
+version = "0.1.0"
+description = "Sample business project used to demonstrate the SDD context module"
+requires-python = ">=3.11"
+dependencies = []
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
