@@ -56,6 +56,20 @@ def _stop_server() -> None:
         _SERVER_PROC = None
 
 
+def _server_command() -> list[str]:
+    """定位官方 powercontext 命令：优先同解释器目录下的 console script。"""
+    args = ["server", "run", "--host", "127.0.0.1", "--port", "8000"]
+    exe_name = "powercontext.exe" if os.name == "nt" else "powercontext"
+    adjacent = os.path.join(os.path.dirname(sys.executable), exe_name)
+    if os.path.isfile(adjacent):
+        return [adjacent, *args]
+    found = shutil.which("powercontext")
+    if found:
+        return [found, *args]
+    # 兜底：用当前解释器调用 console entry 的 main()（等价于 powercontext 命令）
+    return [sys.executable, "-c", "from powercontext.cli.app import main; main()", *args]
+
+
 class MemoryLayer:
     """记忆层：官方 PowerContext SDK 接入（唯一路径，无 SQLite 降级）。"""
 
@@ -69,11 +83,7 @@ class MemoryLayer:
         global _SERVER_PROC
         if _server_alive(self.pc_url):
             return
-        exe = shutil.which("powercontext")
-        if exe:
-            cmd = [exe, "server", "run", "--host", "127.0.0.1", "--port", "8000"]
-        else:
-            cmd = [sys.executable, "-m", "powercontext", "server", "run", "--host", "127.0.0.1", "--port", "8000"]
+        cmd = _server_command()
         try:
             _SERVER_PROC = subprocess.Popen(
                 cmd,
@@ -83,7 +93,7 @@ class MemoryLayer:
         except Exception:
             return
         atexit.register(_stop_server)
-        deadline = time.time() + 60
+        deadline = time.time() + 90
         while time.time() < deadline:
             if _server_alive(self.pc_url):
                 return
