@@ -1,5 +1,0 @@
-requests>=2.31
-pytest>=8.0
-seekdb>=1.4.0
-# 可选：PowerContext 客户端（未安装时状态持久化自动降级本地 JSON）
-# powercontext[client]>=0.1.0
