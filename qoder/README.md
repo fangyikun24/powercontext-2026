@@ -29,6 +29,7 @@ StudyMate 用**记忆层（官方 PowerContext）**把"薄弱点"持续保存，
   （`from powercontext.client import PowerContextClient`），真实调用 `remember_memory` / `search_memory`，
   无任何自制兼容层或 SQLite 降级。
   - 官方 Server：`powercontext server run --host 127.0.0.1 --port 8000`（见 `server/run_powercontext.py`）
+  - CLI 首次调用 `weakness` / `review` 时会探测 `http://127.0.0.1:8000`，未启动则自动拉起官方 Server
   - 实际发挥作用：`weakness add` 写入记忆，`weakness list` / `review` 语义检索复用
 - **Qoder**：全部开发在 Qoder 中完成（开发记录见 `records/QODER_DEV_LOG.md`）；Qoder Sites 发布项目网站（见 `site/`）。
 
@@ -38,11 +39,11 @@ StudyMate 用**记忆层（官方 PowerContext）**把"薄弱点"持续保存，
 # 0) 安装官方依赖
 pip install -r studymate/requirements.txt        # powercontext[cli,builtin]>=1.4
 
-# 1) 部署官方 PowerContext Server（必需，记忆唯一路径）
-python server/run_powercontext.py                 # 或 powercontext server run --host 127.0.0.1 --port 8000
-#    另开终端：
+# 1) 一键自检（推荐）：自动拉起官方 Server，跑通写入/检索/复习
+cd qoder
+python run_demo.py                               # 全部步骤成功时输出 PASS
 
-# 2) 使用（weakness 写入/检索均走官方 PowerContext）
+# 2) 手动使用（CLI 同样会在首次调用时自动拉起官方 Server）
 python -m studymate.cli.main note add "Transformer 自注意力" --tags AI 深度学习 --content "QKV 权重计算，多头并行"
 python -m studymate.cli.main weakness add "过拟合" "训练好验证差，对策：正则化+早停"
 python -m studymate.cli.main review "过拟合"
@@ -78,6 +79,7 @@ qoder/
 │   ├── cli/main.py       # CLI 入口
 │   └── requirements.txt  # 官方依赖 powercontext[cli,builtin]
 ├── server/run_powercontext.py  # 官方 PowerContext Server 启动封装
+├── run_demo.py           # 一键自检（写入/检索/复习，自动拉起官方 Server）
 ├── site/                 # Qoder Sites 网站内容（见 site/README.md）
 ├── records/              # Qoder 开发记录、验证记录
 └── docs/                 # 文档
