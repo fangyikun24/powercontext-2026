@@ -35,12 +35,15 @@ StudyMate 用**记忆层（官方 PowerContext）**把"薄弱点"持续保存，
 
 ## 运行
 
+> 以下命令均在 `qoder/` 目录下执行（先 `cd qoder`）。
+
 ```bash
+cd qoder
+
 # 0) 安装官方依赖
 pip install -r studymate/requirements.txt        # powercontext[cli,builtin]>=1.4
 
 # 1) 一键自检（推荐）：自动拉起官方 Server，跑通写入/检索/复习
-cd qoder
 python run_demo.py                               # 全部步骤成功时输出 PASS
 
 # 2) 手动使用（CLI 同样会在首次调用时自动拉起官方 Server）
