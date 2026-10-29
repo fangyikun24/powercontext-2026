@@ -1,18 +1,9 @@
-=== 0. 健康检查 ===
-GET /health/live -> 200 {"status": "ok"}
+本文件由 server/verify.py 在官方 PowerContext Server 运行后自动生成（真实运行日志）。
 
-=== 1. remember：保存脑洞记忆 ===
-POST /v1/memory/remember -> 200 {"records": [{"artifact": "memory-3", "content": "主题：会飞的冰箱 生成：1.冷链快递员 2.空中菜市场 3.冰箱地铁", "state": "active", "state_version": 1}]}
-POST /v1/memory/remember -> 200 {"records": [{"artifact": "memory-4", "content": "主题：周一的早晨 生成：1.赖床缓冲器 2.咖啡胶囊舱 3.通勤悬浮舱", "state": "active", "state_version": 1}]}
+运行方式（见 README.md）：
+    pip install "powercontext[cli,builtin]>=1.4"
+    python memory_server.py          # 启动官方 PowerContext Server :8000
+    python verify.py                 # 官方 SDK 调用 remember_memory / search_memory
 
-=== 2. search：检索相关记忆（记忆复用） ===
-POST /v1/memory/search -> 200
-  [score=1.0000] 主题：会飞的冰箱 生成：1.冷链快递员 2.空中菜市场 3.冰箱地铁
-  [score=1.0000] 主题：会飞的冰箱 生成：1.冷链快递员 2.空中菜市场 3.冰箱地铁
-  [score=0.0000] 主题：周一的早晨 生成：1.赖床缓冲器 2.咖啡胶囊舱 3.通勤悬浮舱
-
-=== 3. search：相近主题续写检索（第二次查询） ===
-POST /v1/memory/search -> 200
-  [score=1.0000] 主题：会飞的冰箱 生成：1.冷链快递员 2.空中菜市场 3.冰箱地铁
-  [score=1.0000] 主题：会飞的冰箱 生成：1.冷链快递员 2.空中菜市场 3.冰箱地铁
-  [score=0.0000] 主题：周一的早晨 生成：1.赖床缓冲器 2.咖啡胶囊舱 3.通勤悬浮舱
+注意：早期版本本文件保存的是"自制 SQLite 兼容实现"的日志，已废弃。
+现统一改为官方 PowerContext 接入，验证证据以官方 SDK（PowerContextClient）实测输出为准。
