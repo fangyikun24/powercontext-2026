@@ -1,0 +1,17 @@
+# Never commit local state, databases, secrets or generated artifacts.
+.env
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# runtime state (embedded seekdb instances, PowerContext db, scheduler db)
+state/
+*.db
+*.db-wal
+*.db-shm
+
+# produced by `task plan` at run time; the committed copy is the MiniMax development
+# record required by the task, so it is versioned on purpose.
+artifacts/diffs/*.plan.json
+.tmp-context.json
