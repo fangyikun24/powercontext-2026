@@ -59,3 +59,5 @@ Qoder 中实际运行并修复的问题：
 
 关键对话（需求拆解、seekdb 建表、ngram 修复、发布站点）可在 Qoder 任务
 「StudyMate 学习助手项目网站开发」中回看；账号 UID 与站点归属见上。
+
+- `records/qoder-session.png`：Qoder 任务「生成 StudyMate 预览站」的会话与右侧「已发布」站点面板截图（2026-10-29）
