@@ -1,3 +1,3 @@
-# StudyMate 依赖（极简：仅标准库，无第三方必装依赖）
-# PowerContext 通过 HTTP 直连（可选，不装 SDK 也可用降级 SQLite 模式）
-# 如需用 powercontext Python SDK：pip install powercontext[client]
+# StudyMate 依赖：官方 PowerContext 1.4.x（赛题必用技术，唯一记忆路径）
+# 安装：pip install -r requirements.txt
+powercontext[cli,builtin]>=1.4
