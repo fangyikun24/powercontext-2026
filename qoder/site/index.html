@@ -222,26 +222,25 @@
                     <p class="env-line"><span>操作系统</span><b>Windows 11</b></p>
                     <p class="env-line"><span>Python</span><b>3.12.14</b></p>
                     <p class="env-line"><span>数据库驱动</span><b>pylibseekdb 1.4.0.post2（嵌入式，无需 Docker）</b></p>
-                    <p class="env-line"><span>客户端</span><b>pymysql 2.2.8</b></p>
+                    <p class="env-line"><span>客户端</span><b>pymysql 1.2.3</b></p>
                     <p class="env-line"><span>服务端口</span><b>127.0.0.1:8787</b></p>
                     <p class="env-line"><span>数据目录</span><b>C:\Users\Public\StudyMateData\seekdb</b></p>
                 </div>
                 <div class="tech-card code-card">
                     <h4>启动与验证</h4>
-<pre class="code-block"><code># 依赖已就绪，不需要重新安装
-$PY = "&lt;你的用户目录&gt;\studymate-lab\.venv\Scripts\python.exe"
+<pre class="code-block"><code># 在 qoder/ 目录下执行
+python -m pip install -r requirements.txt
 
-# 1. 启动本地演示服务
-&amp; $PY backend\server.py
-#   [seekdb] data dir: C:\Users\Public\StudyMateData\seekdb
+# 1. 一键验收（6 项检查，无需启动服务）
+python run_demo.py
+#   PASS：seekdb 检索 / 过滤 / 复习写回 / 统计全部可用
+
+# 2. 启动本地演示服务
+python backend/server.py
 #   [server] http://127.0.0.1:8787
 
-# 2. 打开演示页，直接带出检索结果
-#   http://127.0.0.1:8787/?q=边际效用
-#   http://127.0.0.1:8787/?q=导数&amp;mode=questions
-
-# 3. 一键复跑验收（7 项断言）
-&amp; $PY backend\verify_seekdb.py</code></pre>
+# 3. 接口级验收（7 项断言，另开终端）
+python backend/verify_seekdb.py</code></pre>
                     <p class="tech-note">两个硬约束：seekdb 数据目录必须是<strong>纯 ASCII 路径</strong>，
                         放在含中文的用户目录下会 <code>seekdb_open failed: code=-1</code>；
                         中文全文索引必须 <code>WITH PARSER ngram</code>，改回默认分词器后中文短语不再命中。</p>

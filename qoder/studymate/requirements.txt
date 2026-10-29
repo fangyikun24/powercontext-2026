@@ -1,3 +1,0 @@
-# StudyMate 依赖：官方 PowerContext 1.4.x（赛题必用技术，唯一记忆路径）
-# 安装：pip install -r requirements.txt
-powercontext[cli,builtin]>=1.4

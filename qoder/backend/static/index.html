@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>StudyMate 检索演示 · seekdb</title>
+<style>
+    * { box-sizing: border-box; }
+    body {
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+        background: linear-gradient(135deg, #f5f7fa 0%, #e8f4f8 100%);
+        color: #26303a;
+        min-height: 100vh;
+    }
+    .wrap { max-width: 880px; margin: 0 auto; padding: 32px 20px 64px; }
+    header { margin-bottom: 24px; }
+    .brand { font-size: 22px; font-weight: 700; color: #5B9BD5; letter-spacing: .5px; }
+    .brand span { color: #26303a; font-weight: 500; font-size: 14px; margin-left: 8px; }
+    h1 { font-size: 26px; margin: 18px 0 6px; }
+    .sub { color: #5b6672; font-size: 14px; line-height: 1.7; }
+    .badge {
+        display: inline-block; margin-top: 10px; padding: 4px 10px; border-radius: 999px;
+        background: #e3f0fb; color: #2f6fa8; font-size: 12px;
+    }
+    .panel {
+        background: #fff; border-radius: 18px; padding: 18px; margin-top: 22px;
+        box-shadow: 0 12px 34px rgba(31, 66, 102, .10);
+    }
+    .tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+    .tab {
+        border: 0; cursor: pointer; padding: 9px 16px; border-radius: 10px;
+        background: #f1f4f7; color: #5b6672; font-size: 14px;
+    }
+    .tab.active { background: #5B9BD5; color: #fff; }
+    .bar { display: flex; gap: 10px; flex-wrap: wrap; }
+    input[type=text], select {
+        height: 44px; border: 2px solid #e3e9ef; border-radius: 12px; padding: 0 14px;
+        font-size: 15px; outline: none; background: #fff;
+    }
+    input[type=text] { flex: 1; min-width: 220px; }
+    input[type=text]:focus, select:focus { border-color: #5B9BD5; }
+    .go {
+        height: 44px; padding: 0 22px; border: 0; border-radius: 12px; cursor: pointer;
+        background: #5B9BD5; color: #fff; font-size: 15px; font-weight: 600;
+    }
+    .go:hover { background: #4A8BC5; }
+    .meta { margin: 14px 0 4px; font-size: 13px; color: #78838f; }
+    .meta b { color: #2f6fa8; }
+    .item {
+        border: 1px solid #edf1f5; border-radius: 14px; padding: 14px 16px; margin-top: 12px;
+        background: #fbfdff;
+    }
+    .item h3 { margin: 0 0 6px; font-size: 16px; }
+    .item p { margin: 6px 0; font-size: 14px; line-height: 1.7; color: #48525c; }
+    .tag {
+        display: inline-block; padding: 2px 8px; border-radius: 6px; background: #eef4fa;
+        color: #4a7fae; font-size: 12px; margin-right: 6px;
+    }
+    .score { float: right; font-size: 12px; color: #9aa5b1; }
+    .answers { font-size: 13px; line-height: 1.8; }
+    .wrong { color: #c0392b; }
+    .right { color: #1e8449; }
+    .review { margin-top: 8px; display: flex; gap: 8px; align-items: center; }
+    .review button {
+        border: 1px solid #d7e2ec; background: #fff; border-radius: 8px; padding: 6px 12px;
+        cursor: pointer; font-size: 13px; color: #3d4b58;
+    }
+    .review button:hover { border-color: #5B9BD5; color: #2f6fa8; }
+    .review .done { color: #1e8449; font-size: 13px; }
+    .stats { display: flex; gap: 22px; flex-wrap: wrap; margin-top: 14px; font-size: 13px; color: #5b6672; }
+    .stats b { color: #26303a; font-size: 16px; display: block; }
+    footer { margin-top: 26px; font-size: 12px; color: #8b96a1; line-height: 1.8; }
+    code { background: #eef2f6; padding: 1px 6px; border-radius: 5px; font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+    <header>
+        <div class="brand">StudyMate <span>学习提效助手 · 检索演示</span></div>
+        <h1>用 seekdb 把笔记和错题真正查出来</h1>
+        <p class="sub">下面的检索不是前端假数据：请求会发到本地 Python 服务，由嵌入式 seekdb 执行
+            ngram 中文全文索引 + 科目过滤，返回真实命中结果与耗时。</p>
+        <span class="badge">seekdb embedded · ngram fulltext · MySQL 协议</span>
+    </header>
+
+    <section class="panel">
+        <div class="tabs">
+            <button class="tab active" data-mode="notes">笔记检索</button>
+            <button class="tab" data-mode="questions">错题检索</button>
+        </div>
+        <div class="bar">
+            <input id="q" type="text" placeholder="试试：边际效用 / 导数 / 间隔重复 / 长难句">
+            <select id="subject">
+                <option value="">全部科目</option>
+                <option>经济学</option>
+                <option>数学</option>
+                <option>英语</option>
+                <option>政治</option>
+                <option>方法</option>
+            </select>
+            <button class="go" id="search">检索</button>
+        </div>
+        <div class="meta" id="meta">输入关键词后回车，开始检索。</div>
+        <div id="results"></div>
+        <div class="stats" id="stats"></div>
+    </section>
+
+    <footer>
+        运行方式：<code>&amp; "…\studymate-lab\.venv\Scripts\python.exe" backend\server.py</code>，然后打开 <code>http://127.0.0.1:8787</code>。<br>
+        数据目录：<code>C:\Users\Public\StudyMateData\seekdb</code>（seekdb 嵌入式实例，ASCII 路径）。<br>
+        验证记录：每次检索返回 <code>engine=seekdb</code>、<code>took_ms</code> 与命中条数；复习动作会写入 <code>review_log</code> 表。
+    </footer>
+</div>
+
+<script>
+const state = { mode: "notes" };
+const $ = (id) => document.getElementById(id);
+
+document.querySelectorAll(".tab").forEach((btn) => {
+    btn.addEventListener("click", () => {
+        document.querySelectorAll(".tab").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        state.mode = btn.dataset.mode;
+        $("q").placeholder = state.mode === "notes"
+            ? "试试：边际效用 / 导数 / 间隔重复 / 长难句"
+            : "试试：导数 / 边际效用 / 长难句 / 错题";
+        $("results").innerHTML = "";
+        $("meta").textContent = "输入关键词后回车，开始检索。";
+    });
+});
+
+function esc(s) {
+    return String(s ?? "").replace(/[&<>"']/g, (c) => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+    })[c]);
+}
+
+async function loadStats() {
+    try {
+        const r = await fetch("/api/stats");
+        const d = await r.json();
+        $("stats").innerHTML =
+            `<div><b>${d.notes}</b>笔记</div>
+             <div><b>${d.questions}</b>错题</div>
+             <div><b>${d.reviews}</b>复习记录</div>
+             <div style="flex:1"></div>
+             <div>${d.by_subject.map((s) => `${esc(s.subject)} 正确率 ${s.accuracy ?? "-"}%`).join(" · ")}</div>`;
+    } catch (e) { /* 忽略统计失败 */ }
+}
+
+async function doSearch() {
+    const q = $("q").value.trim();
+    if (!q) { $("q").focus(); return; }
+    const subject = $("subject").value;
+    $("meta").textContent = "检索中…";
+    $("results").innerHTML = "";
+    try {
+        const url = `/api/${state.mode === "notes" ? "search" : "questions"}?q=${encodeURIComponent(q)}&subject=${encodeURIComponent(subject)}`;
+        const r = await fetch(url);
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || "检索失败");
+        $("meta").innerHTML = `seekdb 命中 <b>${d.count}</b> 条，耗时 <b>${d.took_ms} ms</b>（engine=${d.engine}）`;
+        const rows = d.notes || d.questions || [];
+        $("results").innerHTML = rows.map((it) => {
+            if (state.mode === "notes") {
+                return `<article class="item">
+                    <span class="score">score ${Number(it.score).toFixed(3)}</span>
+                    <h3>${esc(it.title)}</h3>
+                    <div><span class="tag">${esc(it.subject)}</span></div>
+                    <p>${esc(it.content)}</p>
+                </article>`;
+            }
+            return `<article class="item">
+                <span class="score">score ${Number(it.score).toFixed(3)}</span>
+                <h3>${esc(it.question)}</h3>
+                <div class="answers">
+                    <div class="wrong">✗ 错误答案：${esc(it.wrong_answer)}</div>
+                    <div class="right">✓ 正确答案：${esc(it.correct_answer)}</div>
+                    <div><span class="tag">${esc(it.subject)}</span><span class="tag">${esc(it.knowledge_point)}</span>
+                         已练 ${it.attempts} 次 / 对 ${it.correct_count} 次</div>
+                </div>
+                <div class="review">
+                    <button data-id="${it.id}" data-correct="1">这次答对了</button>
+                    <button data-id="${it.id}" data-correct="0">这次答错了</button>
+                    <span class="done" id="done-${it.id}"></span>
+                </div>
+            </article>`;
+        }).join("");
+        document.querySelectorAll(".review button").forEach((btn) => {
+            btn.addEventListener("click", async () => {
+                const id = btn.dataset.id;
+                const correct = btn.dataset.correct === "1";
+                const resp = await fetch("/api/review", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ question_id: Number(id), correct })
+                });
+                const out = await resp.json();
+                if (resp.ok) {
+                    $("done-" + id).textContent = `已写入 seekdb：第 ${out.question.attempts} 次练习`;
+                    loadStats();
+                }
+            });
+        });
+        loadStats();
+    } catch (e) {
+        $("meta").textContent = "检索失败：" + e.message;
+    }
+}
+
+$("search").addEventListener("click", doSearch);
+$("q").addEventListener("keydown", (e) => { if (e.key === "Enter") doSearch(); });
+loadStats();
+
+// 支持 ?q=关键词&mode=questions 直接打开检索结果，便于演示与验证
+(function autoRun() {
+    const params = new URLSearchParams(location.search);
+    const q = params.get("q");
+    if (!q) return;
+    if (params.get("mode") === "questions") {
+        state.mode = "questions";
+        document.querySelectorAll(".tab").forEach((b) => {
+            b.classList.toggle("active", b.dataset.mode === "questions");
+        });
+    }
+    $("q").value = q;
+    doSearch();
+})();
+</script>
+</body>
+</html>

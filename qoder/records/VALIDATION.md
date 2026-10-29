@@ -1,70 +1,76 @@
-# StudyMate 验证记录（VALIDATION）
+# 验证记录（VALIDATION）
 
-> 记录方式：官方 PowerContext Server + 官方 Python SDK 实测，可复现核对。
+> 记录时间：2026-10-29
+> 环境：Windows 11 · Python 3.12 · `pylibseekdb 1.4.0.post2` · `pymysql 1.2.3`
+> 数据目录：`C:\Users\Public\StudyMateData\seekdb`（ASCII 路径）
 
-## 环境
+## 验证 1：一键验收（无需启动 HTTP 服务）
 
-- Python 3.11+（Windows / Linux 均可）
-- 官方 PowerContext 1.4.x：`pip install "powercontext[cli,builtin]>=1.4"`
-- 官方 Server：`python server/run_powercontext.py`（等价 `powercontext server run --host 127.0.0.1 --port 8000`）
+```bash
+cd qoder
+pip install -r requirements.txt
+python run_demo.py
+```
 
-## 验证 1：薄弱点记忆写入与检索（官方 PowerContext）
+实际输出：
+
+```
+数据目录：C:\Users\Public\StudyMateData\seekdb
+初始化：建表并写入 8 条笔记 / 6 道错题
+[PASS] seekdb 中文全文检索（笔记） · 命中 1 条，首条《边际效用递减》 score=1.6995664355304099
+[PASS] seekdb 中文全文检索（错题） · 命中 1 条，首条「求函数 f(x) = x²e^x 的导数」
+[PASS] 科目过滤下推到 seekdb · subject=数学 1 条 / subject=英语 0 条
+[PASS] 复习动作写回数据库 · attempts 3 → 4
+[PASS] review_log 增加 1 条 · reviews 0 → 1
+[PASS] 分科目正确率统计 · 数学 6次 66.7% / 英语 3次 33.3% / 经济学 2次 100.0% / 方法 2次 100.0% / 政治 1次 0.0%
+
+共 6 项，失败 0 项
+PASS：seekdb 检索 / 过滤 / 复习写回 / 统计全部可用
+```
+
+## 验证 2：接口级验收（启动 server 后）
+
+```bash
+python backend/server.py
+# 另开终端：
+python backend/verify_seekdb.py
+```
+
+实际输出（节选）：
+
+```
+PASS · engine 声明为 seekdb
+PASS · 笔记检索「边际效用」返回 score 与 took_ms
+PASS · 错题检索「导数」返回 score 与 took_ms
+PASS · 科目过滤下推到 seekdb 执行
+PASS · 复习写回返回 attempts/correct_count
+PASS · review_log 增加 1 条
+PASS · 对应科目正确率随写回变化
+
+共 7 项，失败 0 项
+```
+
+## 验证 3：HTTP 接口
 
 ```text
-$ python -m studymate.cli.main weakness add "机器学习-过拟合" "训练集表现好但验证集差，常见对策是正则化与早停"
-✔ 薄弱点已记入记忆（memory:...）
-记忆层：官方 PowerContext SDK（http://127.0.0.1:8000，scope=project:studymate）
-
-$ python -m studymate.cli.main weakness list
-记忆中已记录的薄弱点：
-  1. 机器学习-过拟合：训练集表现好但验证集差，常见对策是正则化与早停
+GET /api/search?q=边际效用   → 200，count=1，took_ms≈20，首条 score≈1.6996
+GET /api/stats               → 200，notes=8，questions=6，reviews 随复习递增
+POST /api/review             → 200，attempts 3→4，correct_count 2→3
 ```
 
-**结论：记忆写入 + 官方 SDK 语义检索复用 ✓（无 SQLite 降级）**
+## 技术作用说明
 
-## 验证 2：笔记存储与检索
-
-```text
-$ python -m studymate.cli.main note add "SQL 索引原理" --tags 数据库 SQL --content "索引是数据库加速查询的数据结构，B+树索引按序存储"
-✔ 笔记已保存 (#1)：SQL 索引原理
-
-$ python -m studymate.cli.main note search "数据库 索引"
-[1] SQL 索引原理  标签=数据库,SQL
-   索引是数据库加速查询的数据结构，B+树索引按序存储
-```
-
-**结论：笔记存储 + 全文检索 ✓**
-
-## 验证 3：重启后状态复用（关键验收项）
-
-```python
-# 模拟重启：重新创建 MemoryLayer（新进程语义），再次从官方 PowerContext 检索
-mem2 = MemoryLayer()
-mem2.search('过拟合')   # → 从 PowerContext 语义检索返回 1 条薄弱点
-```
-
-**结论：状态可复用 ✓（数据持久化于官方 PowerContext，进程重启后仍可检索召回）**
-
-## 验证 4：官方 SDK 调用链路（核心证据）
-
-记忆层代码真实调用官方 API：
-
-```python
-from powercontext.client import PowerContextClient
-from powercontext.http import RememberMemoryRequest, SearchMemoryRequest
-
-async with PowerContextClient("http://127.0.0.1:8000") as client:
-    await client.remember_memory(RememberMemoryRequest(scope_id="project:studymate", kind="weakness", text="..."))
-    resp = await client.search_memory(SearchMemoryRequest(scope_id="project:studymate", query="过拟合", limit=5))
-    # resp.hits[].memory.text 即命中的薄弱点
-```
-
-## 覆盖情况
-
-| 验收项 | 状态 |
+| 环节 | seekdb 的实际作用 |
 |---|---|
-| 项目能运行 | ✓（官方依赖 + 官方 Server） |
-| PowerContext 实际发挥作用 | ✓（官方 SDK 唯一记忆路径：写入/语义检索，无自制兼容层） |
-| 状态可复用 | ✓（验证 3） |
-| Qoder 开发可核对 | ✓（records/QODER_DEV_LOG.md） |
-| 网站可访问 | ✓（Qoder Sites 已发布，见 site/README.md） |
+| 笔记检索 | `MATCH(content) AGAINST('边际效用')` 命中《边际效用递减》，返回真实 score |
+| 错题检索 | `MATCH(question) AGAINST('导数')` 命中导数题，返回题干、错因与复习次数 |
+| 科目过滤 | `AND subject = '数学'` 由 seekdb 执行；换成“英语”返回 0 条 |
+| 复习写回 | `UPDATE questions ...` + `INSERT INTO review_log`，统计页正确率同步变化 |
+| 中文分词 | `FULLTEXT INDEX ... WITH PARSER ngram`，默认分词器对中文不分词 |
+
+## 复现注意
+
+- `pylibseekdb` 会启动嵌入式 `seekdb.exe` 并锁定数据目录；同一目录不要同时开多个实例，
+  否则会出现 `seekdb_open failed` 或连接异常。首次运行请使用全新数据目录。
+- 数据目录必须是纯 ASCII 路径；含中文的用户目录会导致 `seekdb_open failed: code=-1`。
+- 端口可用 `STUDYMATE_PORT` 覆盖（默认 8787）；启动前确认端口未被占用。

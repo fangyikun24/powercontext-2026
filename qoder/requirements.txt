@@ -1,0 +1,6 @@
+# StudyMate 依赖（seekdb 嵌入式方案）
+
+# seekdb Python 运行时（嵌入式，无需 Docker / 独立服务）
+pylibseekdb>=1.4.0.post1
+# MySQL 协议驱动（seekdb 兼容 MySQL）
+pymysql>=1.1

@@ -1,89 +1,145 @@
-# StudyMate · 学习提效助手（Qoder 赛道作品）
+# StudyMate · 学习提效助手（Qoder × OceanBase 赛道作品）
 
-> **赛道**：Qoder —— Build with Qoder（20 分）
-> **核心思想**：围绕学习科研提效，用 Qoder 开发一个"学习薄弱点记忆助手"，PowerContext 承担记忆复用（官方 SDK 接入），Qoder Sites 发布项目网站。
+StudyMate 是一个面向大学生/考研人群的学习提效工具：把笔记和错题真正存进 **seekdb**，
+用中文全文检索 + 科目过滤找回它们，并把每次复习结果写回数据库，形成可追踪的薄弱点。
+
+- **项目网站（Qoder Sites，任何人可访问）**：https://studymate-6ni50nl82vr.qoder.website
+- **代码仓库**：https://github.com/fangyikun24/powercontext-2026（分支 `2026-competition-ecosystem`，本目录 `qoder/`）
+- **技术结合**：seekdb 嵌入式数据库（`pylibseekdb` + MySQL 协议），中文 `ngram` 全文索引、
+  科目结构化过滤、复习写回与分科目统计，均为真实 SQL 查询，不是前端假数据。
 
 ## 解决的问题
 
-学生/科研人员在长期学习中普遍面临：
-1. **学了就忘** —— 薄弱点散落在笔记/文档里，难以按需召回；
-2. **复习无重点** —— 不知道哪些知识点薄弱、何时该复习；
-3. **资料难检索** —— 笔记写了不少，用关键词搜索效果差。
-
-StudyMate 用**记忆层（官方 PowerContext）**把"薄弱点"持续保存，随时语义检索复用，让每次学习都有上下文延续。
-
-## 核心功能
-
-| 功能 | 命令 | 说明 |
-|---|---|---|
-| 记笔记 | `studymate note add "标题" --tags 标签 --content 内容` | 本地资料库存储 |
-| 检索笔记 | `studymate note search "关键词"` | 全文检索 |
-| 记录薄弱点 | `studymate weakness add "知识点" "薄弱描述"` | **写入官方 PowerContext 记忆** |
-| 查看薄弱点 | `studymate weakness list` | 记忆语义检索复用 |
-| 一键复习 | `studymate review "主题"` | 合并笔记 + 薄弱点输出复习清单 |
-| 状态查看 | `studymate status` | 记忆层/资料库状态 |
-
-## 技术结合（赛题必用技术实际发挥作用）
-
-- **PowerContext（必用，官方接入）**：`core/memory.py` 使用 **OceanBase 官方 PowerContext 1.4.x Python SDK**
-  （`from powercontext.client import PowerContextClient`），真实调用 `remember_memory` / `search_memory`，
-  无任何自制兼容层或 SQLite 降级。
-  - 官方 Server：`powercontext server run --host 127.0.0.1 --port 8000`（见 `server/run_powercontext.py`）
-  - CLI 首次调用 `weakness` / `review` 时会探测 `http://127.0.0.1:8000`，未启动则自动拉起官方 Server
-  - 实际发挥作用：`weakness add` 写入记忆，`weakness list` / `review` 语义检索复用
-- **Qoder**：全部开发在 Qoder 中完成（开发记录见 `records/QODER_DEV_LOG.md`）；Qoder Sites 发布项目网站（见 `site/`）。
-
-## 运行
-
-> 以下命令均在 `qoder/` 目录下执行（先 `cd qoder`）。
-
-```bash
-cd qoder
-
-# 0) 安装官方依赖
-pip install -r studymate/requirements.txt        # powercontext[cli,builtin]>=1.4
-
-# 1) 一键自检（推荐）：自动拉起官方 Server，跑通写入/检索/复习
-python run_demo.py                               # 全部步骤成功时输出 PASS
-
-# 2) 手动使用（CLI 同样会在首次调用时自动拉起官方 Server）
-python -m studymate.cli.main note add "Transformer 自注意力" --tags AI 深度学习 --content "QKV 权重计算，多头并行"
-python -m studymate.cli.main weakness add "过拟合" "训练好验证差，对策：正则化+早停"
-python -m studymate.cli.main review "过拟合"
-python -m studymate.cli.main status
-```
-
-## 验证样例（官方 PowerContext 模式，已实测）
-
-```
-$ python -m studymate.cli.main weakness add "机器学习-过拟合" "训练集表现好但验证集差，常见对策是正则化与早停"
-✔ 薄弱点已记入记忆（memory:...）
-记忆层：官方 PowerContext SDK（http://127.0.0.1:8000，scope=project:studymate）
-
-$ python -m studymate.cli.main weakness list
-记忆中已记录的薄弱点：
-  1. 机器学习-过拟合：训练集表现好但验证集差，常见对策是正则化与早停
-
-$ python -m studymate.cli.main status
-笔记总数：2
-记忆层：官方 PowerContext SDK（http://127.0.0.1:8000，scope=project:studymate）
-```
-
-重启后（新建进程）再次 `weakness list` / `review`，数据仍从 PowerContext 语义检索返回 —— **状态可复用**已验证。
+1. **学了就忘**：笔记散落、错题不归档 → 统一存入 seekdb，按关键词/科目随时找回；
+2. **复习没重点**：不知道哪些知识点薄弱 → 每次复习写回 `review_log`，统计分科目正确率；
+3. **检索不精准**：普通关键词搜索匹配差 → seekdb `FULLTEXT ... WITH PARSER ngram` 中文分词 + 科目过滤。
 
 ## 目录结构
 
 ```
 qoder/
-├── studymate/
-│   ├── core/
-│   │   ├── memory.py     # 官方 PowerContext SDK 记忆层（PowerContextClient）
-│   │   └── kb.py         # 学习资料库（笔记 + 全文检索）
-│   ├── cli/main.py       # CLI 入口
-│   └── requirements.txt  # 官方依赖 powercontext[cli,builtin]
-├── server/run_powercontext.py  # 官方 PowerContext Server 启动封装
-├── run_demo.py           # 一键自检（写入/检索/复习，自动拉起官方 Server）
-├── site/                 # Qoder Sites 网站内容（见 site/README.md）
-├── records/              # Qoder 开发记录、验证记录
-└── docs/                 # 文档
+├── backend/
+│   ├── server.py          # HTTP API + 静态页面（标准库，无 Web 框架）
+│   ├── verify_seekdb.py   # 7 项接口级验收（需先启动 server.py）
+│   └── static/index.html  # 可交互的检索/复习演示页
+├── run_demo.py            # 一键验收（直接调用后端函数，无需启动服务）
+├── requirements.txt       # pylibseekdb + pymysql
+├── records/               # Qoder 开发记录、验证记录
+├── site/                  # Qoder Sites 发布的网站源文件
+└── README.md
 ```
+
+## 运行环境
+
+- Python 3.11+
+- Windows / Linux / macOS
+- 依赖：`pylibseekdb>=1.4.0.post1`（seekdb 嵌入式运行时）、`pymysql>=1.1`
+
+数据目录默认值（可用环境变量 `STUDYMATE_SEEKDB_DIR` 覆盖，必须是纯 ASCII 路径）：
+
+- Windows：`C:\Users\Public\StudyMateData\seekdb`
+- Linux/macOS：`/tmp/studymate-seekdb`
+
+## 安装与运行（评审按此复现）
+
+```bash
+cd qoder
+pip install -r requirements.txt
+
+# 1) 一键验收：建表 + 写入 8 条笔记/6 道错题 + 6 项检查
+python run_demo.py
+# 期望末尾输出：PASS：seekdb 检索 / 过滤 / 复习写回 / 统计全部可用
+
+# 2) 启动可交互演示页（另开终端）
+python backend/server.py
+# 浏览器打开 http://127.0.0.1:8787
+```
+
+可覆盖端口与数据目录：
+
+```bash
+STUDYMATE_PORT=8899 STUDYMATE_SEEKDB_DIR=/tmp/sm-db python backend/server.py   # Linux/macOS
+$env:STUDYMATE_PORT=8899; $env:STUDYMATE_SEEKDB_DIR="D:\sm-db"; python backend\server.py  # Windows
+```
+
+> 启动 `server.py` 后，可另开终端运行 `python backend/verify_seekdb.py`，
+> 它会依次验证 7 项接口级行为（engine、两次检索的 score/took_ms、科目过滤、复习写回、review_log、正确率）。
+
+## 验证样例
+
+### 样例 1：中文全文检索（笔记）
+
+```bash
+python run_demo.py
+```
+
+实际输出（节选）：
+
+```
+[PASS] seekdb 中文全文检索（笔记） · 命中 1 条，首条《边际效用递减》 score=1.6995664355304099
+[PASS] seekdb 中文全文检索（错题） · 命中 1 条，首条「求函数 f(x) = x²e^x 的导数」
+[PASS] 科目过滤下推到 seekdb · subject=数学 1 条 / subject=英语 0 条
+[PASS] 复习动作写回数据库 · attempts 3 → 4
+[PASS] review_log 增加 1 条 · reviews 0 → 1
+[PASS] 分科目正确率统计 · 数学 6次 66.7% / 英语 3次 33.3% / …
+共 6 项，失败 0 项
+PASS：seekdb 检索 / 过滤 / 复习写回 / 统计全部可用
+```
+
+### 样例 2：接口级验收（启动 server 后）
+
+```bash
+python backend/server.py            # 终端 A
+python backend/verify_seekdb.py     # 终端 B
+```
+
+实际输出（节选）：
+
+```
+PASS · engine 声明为 seekdb
+PASS · 笔记检索「边际效用」返回 score 与 took_ms
+PASS · 错题检索「导数」返回 score 与 took_ms
+PASS · 科目过滤下推到 seekdb 执行
+PASS · 复习写回返回 attempts/correct_count
+PASS · review_log 增加 1 条
+PASS · 对应科目正确率随写回变化
+共 7 项，失败 0 项
+```
+
+### 样例 3：浏览器交互
+
+打开 <http://127.0.0.1:8787/?q=边际效用>，页面显示“seekdb 命中 1 条，耗时 x ms”，
+在错题页点“这次答对了”，提示“已写入 seekdb：第 N 次练习”，统计区正确率同步变化。
+
+## 表结构（seekdb / MySQL 协议）
+
+```sql
+CREATE TABLE notes (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  title VARCHAR(200), content TEXT, subject VARCHAR(50), tags VARCHAR(200),
+  FULLTEXT INDEX ft_notes (content) WITH PARSER ngram
+) ORGANIZATION = HEAP;
+
+CREATE TABLE questions (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  subject VARCHAR(50), question TEXT,
+  wrong_answer VARCHAR(500), correct_answer VARCHAR(500), knowledge_point VARCHAR(200),
+  attempts INT DEFAULT 0, correct_count INT DEFAULT 0,
+  FULLTEXT INDEX ft_questions (question) WITH PARSER ngram
+) ORGANIZATION = HEAP;
+
+CREATE TABLE review_log (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  question_id INT, correct TINYINT, reviewed_at DATETIME DEFAULT CURRENT_TIMESTAMP
+) ORGANIZATION = HEAP;
+```
+
+## Qoder 开发记录
+
+- 开发过程见 `records/QODER_DEV_LOG.md`，验证输出见 `records/VALIDATION.md`。
+- Qoder 账号 UID：`01a1834d-987e-7381-81d7-81305fd2bbe8`（站点归属与开发记录核对用）。
+
+## 已知边界
+
+- 线上站点是纯静态展示页，不会请求 `127.0.0.1`；真实检索/复习在本地按上文运行。
+- seekdb 数据目录必须为纯 ASCII 路径（含中文的路径会导致 `seekdb_open failed`）。
