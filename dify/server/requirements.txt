@@ -1,0 +1,3 @@
+# Dify 赛道作品：官方 PowerContext 依赖
+# 安装：pip install -r requirements.txt
+powercontext[cli,builtin]>=1.4
